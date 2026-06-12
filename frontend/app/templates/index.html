@@ -1,16 +1,298 @@
 <!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>ML — Sharp VR Album</title>
-<style>
-body {
-  margin: auto;
-}
-main {
-  margin: auto;
-  max-width: 768px;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML — Sharp VR Album</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body { 
+      /* margin: auto; */
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+      background: #f5f5f7;
+      color: #111;
+    }
+    .app {
+      max-width: 430px;
+      min-height: 100vh;
+      margin: 0 auto;
+      background: white;
+      position: relative;
+      padding: 32px 24px 110px;
+    }
+    h1 {
+      margin: 0 0 32px;
+      font-size: 34px;
+      font-weight: 700;
+    }
+    .screen {
+      display: none;
+    }
+    .screen.active {
+      display: block;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 28px;
+    }
+    .object-card {
+      cursor: pointer;
+    }
+    .object-thumb {
+      width: 96px;
+      height: 96px;
+      border-radius: 18px;
+      background: #f0f1f4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 54px;
+      margin-bottom: 10px;
+    }
+    .object-name {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .object-date {
+      color: #8b94a5;
+      font-size: 14px;
+    }
+    .panel {
+      margin-top: 32px;
+      background: #f1f1f3;
+      border-radius: 16px;
+      overflow: hidden;
+      text-align: center;
+    }
+    .panel div {
+      padding: 18px;
+      border-bottom: 1px solid #d0d0d4;
+    }
+    .panel button {
+      width: 100%;
+      border: none;
+      background: transparent;
+      padding: 16px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .fab {
+      position: absolute;
+      right: 32px;
+      bottom: 130px;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: none;
+      background: white;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+      font-size: 38px;
+      cursor: pointer;
+    }
+    .bottom-nav {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      max-width: 430px;
+      width: 100%;
+      height: 88px;
+      background: white;
+      border-radius: 28px 28px 0 0;
+      box-shadow: 0 -8px 30px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+    }
+    .nav-item {
+      border: none;
+      background: none;
+      font-size: 24px;
+      color: #999;
+      cursor: pointer;
+    }
+    .nav-item.active {
+      color: #000;
+      font-weight: 700;
+    }
+    .camera-placeholder,
+    .ar-placeholder {
+      height: 620px;
+      border-radius: 24px;
+      background: #777;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      text-align: center;
+    }
+    .back {
+      border: none;
+      background: none;
+      font-size: 32px;
+      margin-bottom: 24px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Gallery -->
+    <section id="gallery" class="screen active">
+      <h1>Gallery</h1>
+      <div id="gallery-grid" class="grid"></div>
+      <button class="fab" onclick="showScreen('camera')">+</button>
+    </section>
+
+    <!-- Store -->
+    <section id="store" class="screen">
+      <button class="back" onclick="showScreen('gallery')">‹</button>
+      <h1>Store</h1>
+      <div id="store-grid" class="grid"></div>
+      <div id="store-panel" class="panel" style="display:none;">
+        <div id="selected-store-name">Object selected</div>
+        <button onclick="addSelectedToGallery()">Add to Gallery</button>
+      </div>
+    </section>
+
+    <!-- Camera -->
+    <section id="camera" class="screen">
+      <h1>Camera</h1>
+      <div class="camera-placeholder">
+        <div>
+          <p>Take 1 to 4 pictures of your object</p>
+          <button onclick="showProcessing()">Capture</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Processing -->
+    <section id="processing" class="screen">
+      <h1>Processing</h1>
+      <div class="camera-placeholder">
+        processing...
+      </div>
+    </section>
+
+    <!-- AR -->
+    <section id="ar" class="screen">
+      <h1>AR View</h1>
+      <div class="ar-placeholder">
+        Select an object from Gallery first
+      </div>
+    </section>
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-item" onclick="showScreen('ar')">AR</button>
+    <button class="nav-item" onclick="showScreen('camera')">CAM</button>
+    <button class="nav-item active" onclick="showScreen('gallery')">◼</button>
+    <button class="nav-item" onclick="showScreen('store')">⬇</button>
+  </nav>
+
+  <script>
+    let galleryObjects = [];
+    let storeObjects = [];
+    let selectedStoreObject = null;
+
+    async function loadObjects() {
+      const galleryRes = await fetch("/api/gallery-objects");
+      galleryObjects = await galleryRes.json();
+      const storeRes = await fetch("/api/store-objects");
+      storeObjects = await storeRes.json();
+      renderGallery();
+      renderStore();
+    }
+
+    function renderGallery() {
+      const grid = document.getElementById("gallery-grid");
+      grid.innerHTML = "";
+      galleryObjects.forEach(obj => {
+        grid.innerHTML += `
+          <div class="object-card" onclick="openViewer('${obj.id}')">
+            <div class="object-thumb">◼</div>
+            <div class="object-name">${obj.name}</div>
+            <div class="object-date">${obj.createdAt}</div>
+          </div>
+        `;
+      });
+    }
+
+    function renderStore() {
+      const grid = document.getElementById("store-grid");
+      grid.innerHTML = "";
+      storeObjects.forEach(obj => {
+        grid.innerHTML += `
+          <div class="object-card" onclick="selectStoreObject('${obj.id}')">
+            <div class="object-thumb">◼</div>
+            <div class="object-name">${obj.name}</div>
+            <div class="object-date">${obj.createdAt}</div>
+          </div>
+        `;
+      });
+
+    }
+
+    function selectStoreObject(id) {
+      selectedStoreObject = storeObjects.find(o => o.id === id);
+      document.getElementById("selected-store-name").innerText = selectedStoreObject.name + " selected";
+      document.getElementById("store-panel").style.display = "block";
+    }
+
+    function addSelectedToGallery() {
+
+      if (!selectedStoreObject) return;
+
+      const exists = galleryObjects.some(o => o.id === selectedStoreObject.id);
+
+      if (!exists) {
+        galleryObjects.push(selectedStoreObject);
+      }
+
+      selectedStoreObject = null;
+      document.getElementById("store-panel").style.display = "none";
+      renderGallery();
+      showScreen("gallery");
+    }
+
+    function openViewer(id) {
+      window.location.href = `/ar/viewer?object=${id}`; //each object opens viewer with own object id
+    }
+
+    function showProcessing() {
+      showScreen("processing");
+      setTimeout(() => {
+        alert("Success! Object created.");
+        showScreen("gallery");
+      }, 1200);
+    }
+    function showScreen(id) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+      document.querySelectorAll(".nav-item").forEach(btn => btn.classList.remove("active"));
+    }
+    loadObjects();
+  </script>
+<footer class="credits">
+  Made with
+  <a href="https://github.com/boutell/ml-sharp-ez">ml-sharp-ez</a>
+  and
+  <a href="https://github.com/apple/ml-sharp">ml-sharp</a>
+</footer>
+</body>
+</html>
+<!-- <body>
+  <div class="app">
+    main {
+      margin: auto;
+      max-width: 768px;
+  }
+  </style>
 </head>
 <body>
 <main>
@@ -23,4 +305,4 @@ main {
 </ul>
 <p>Made with <a href="https://github.com/boutell/ml-sharp-ez">ml-sharp-ez</a> and <a href="https://github.com/apple/ml-sharp">ml-sharp</a></p>
 </main>
-</body>
+</body> -->
