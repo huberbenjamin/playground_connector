@@ -21,7 +21,7 @@
     window.VIEWER_CONFIG = {
       splats: [
         {% for i in range(1, 5) %}
-          "{{ url_for('static', filename='assets/demo/extracted_%03d.ply' % i) }}"{% if not loop.last %},{% endif %}
+          "{{ url_for('static', filename='assets/demo/extracted_%03d.sog' % i) }}"{% if not loop.last %},{% endif %}
         {% endfor %}
       ]
     };

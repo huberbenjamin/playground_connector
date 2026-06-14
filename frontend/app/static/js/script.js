@@ -1,70 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ML — Sharp VR Album</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-
-</head>
-<body>
-  <div class="app">
-
-    <!-- Gallery -->
-    <section id="gallery" class="screen active">
-      <h1>Gallery</h1>
-      <div id="gallery-grid" class="grid"></div>
-      <button class="fab" onclick="showScreen('camera')">+</button>
-    </section>
-
-    <!-- Store -->
-    <section id="store" class="screen">
-      <button class="back" onclick="showScreen('gallery')">‹</button>
-      <h1>Store</h1>
-      <div id="store-grid" class="grid"></div>
-      <div id="store-panel" class="panel" style="display:none;">
-        <div id="selected-store-name">Object selected</div>
-        <button onclick="addSelectedToGallery()">Add to Gallery</button>
-      </div>
-    </section>
-
-    <!-- Camera -->
-    <section id="camera" class="screen">
-      <h1>Camera</h1>
-      <div class="camera-placeholder">
-        <div>
-          <p>Take 1 to 4 pictures of your object</p>
-          <button onclick="showProcessing()">Capture</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Processing -->
-    <section id="processing" class="screen">
-      <h1>Processing</h1>
-      <div class="camera-placeholder">
-        processing...
-      </div>
-    </section>
-
-    <!-- AR -->
-    <section id="ar" class="screen">
-      <h1>AR View</h1>
-      <div class="ar-placeholder">
-        Select an object from Gallery first
-      </div>
-    </section>
-  </div>
-
-  <nav class="bottom-nav">
-    <button class="nav-item" onclick="showScreen('ar')">AR</button>
-    <button class="nav-item" onclick="showScreen('camera')">CAM</button>
-    <button class="nav-item active" onclick="showScreen('gallery')">◼</button>
-    <button class="nav-item" onclick="showScreen('store')">⬇</button>
-  </nav>
-
-  <script>
-    let galleryObjects = [];
+let galleryObjects = [];
     let storeObjects = [];
     let selectedStoreObject = null;
 
@@ -145,8 +79,3 @@
       document.querySelectorAll(".nav-item").forEach(btn => btn.classList.remove("active"));
     }
     loadObjects();
-  </script>
-<footer class="credits">
-  Made with
-  <a href="https:/
-  <script src="{{ url_for('static', filename='js/script.js') }}"></script>

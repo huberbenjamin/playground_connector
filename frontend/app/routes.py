@@ -8,10 +8,10 @@ DEMO_OBJECTS = [
         "name": "Demo Object",
         "createdAt": "2026-06-12",
         "files": [
-            "/static/assets/demo/extracted_001.ply",
-            "/static/assets/demo/extracted_002.ply",
-            "/static/assets/demo/extracted_003.ply",
-            "/static/assets/demo/extracted_004.ply",
+            "/static/assets/demo/extracted_001.sog",
+            "/static/assets/demo/extracted_002.sog",
+            "/static/assets/demo/extracted_003.sog",
+            "/static/assets/demo/extracted_004.sog",
         ],
     }
 ]
@@ -32,7 +32,6 @@ def ar_viewer():
     return render_template("viewer.html", selected_object=selected)
 
 @main_bp.get("/api/store-objects")
-
 def store_objects():
     return jsonify(DEMO_OBJECTS)
 
