@@ -147,13 +147,21 @@
     }
 
     function continueToProcessing() {
-      if (capturedImages.length === 0) {
+      if (capturedImages.length === 0) { // 2-3 images ok as well?
         alert("Capture at least one image first.");
         return;
       }
 
       stopCamera();
-      showProcessing();
+
+      // later upload to backend
+      showScreen("processing");
+
+      setTimeout(() => {
+        resetCameraCaptureState();
+        alert("Success! Object created.");
+        showScreen("gallery");
+      }, 1200);
     }
 
     function stopCamera() {
@@ -245,6 +253,20 @@
         stopCamera();
       }
     }
+
+    function resetCameraCaptureState() {
+      capturedImages = [];
+
+      document.getElementById("capture-count").innerText =
+        "0 / 4 images captured";
+
+      const previewRow = document.getElementById("preview-row");
+      if (previewRow) {
+        previewRow.innerHTML = "";
+      }
+    }
+
+
     loadObjects();
   </script>
 <footer class="credits">
