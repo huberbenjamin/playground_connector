@@ -1,0 +1,21 @@
+{
+  "name": "playground-connector-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@playground/shared-types && npm run build --workspace=@playground/api",
+    "dev": "npm run dev --workspace=@playground/api",
+    "start": "npm run start --workspace=@playground/api",
+    "start:prod": "npm run start:prod --workspace=@playground/api",
+    "prisma:generate": "npm run prisma:generate --workspace=@playground/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@playground/api",
+    "prisma:migrate:deploy": "npm run prisma:migrate:deploy --workspace=@playground/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
