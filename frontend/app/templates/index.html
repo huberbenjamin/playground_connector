@@ -31,12 +31,19 @@
     <!-- Camera -->
     <section id="camera" class="screen">
       <h1>Camera</h1>
+
       <div class="camera-placeholder">
-        <div>
-          <p>Take 1 to 4 pictures of your object</p>
-          <button onclick="showProcessing()">Capture</button>
-        </div>
+        <video id="camera-video" autoplay playsinline muted></video>
+        <canvas id="capture-canvas" style="display:none;"></canvas>
       </div>
+
+      <p id="capture-count">0 / 4 images captured</p>
+
+      <button onclick="startCamera()">Start Camera</button>
+      <button onclick="captureImage()">Capture</button>
+      <button onclick="continueToProcessing()">Continue</button>
+
+      <div id="preview-row"></div>
     </section>
 
     <!-- Processing -->
@@ -67,6 +74,84 @@
     let galleryObjects = [];
     let storeObjects = [];
     let selectedStoreObject = null;
+
+    let capturedImages = [];
+    let cameraStream = null;
+
+    async function startCamera() {
+      try {
+        const video = document.getElementById("camera-video");
+
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment"
+          },
+          audio: false
+        });
+
+        video.srcObject = cameraStream;
+      } catch (error) {
+        console.error("Camera access failed:", error);
+        alert("Could not access camera. Please allow camera permissions.");
+      }
+    }
+
+    function captureImage() {
+      if (capturedImages.length >= 4) {
+        alert("You already captured 4 images.");
+        return;
+      }
+
+      const video = document.getElementById("camera-video");
+      const canvas = document.getElementById("capture-canvas");
+
+      if (!video.srcObject) {
+        alert("Start the camera first.");
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+
+        capturedImages.push(blob);
+        updateCaptureUI(blob);
+      }, "image/jpeg", 0.9);
+    }
+
+    function updateCaptureUI(blob) {
+      document.getElementById("capture-count").innerText =
+        `${capturedImages.length} / 4 images captured`;
+
+      const previewRow = document.getElementById("preview-row");
+      const img = document.createElement("img");
+      img.className = "preview-img";
+      img.src = URL.createObjectURL(blob);
+      previewRow.appendChild(img);
+    }
+
+    function continueToProcessing() {
+      if (capturedImages.length === 0) {
+        alert("Capture at least one image first.");
+        return;
+      }
+
+      stopCamera();
+      showProcessing();
+    }
+
+    function stopCamera() {
+      if (!cameraStream) return;
+
+      cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream = null;
+    }
+    
 
     async function loadObjects() {
       const galleryRes = await fetch("/api/gallery-objects");
@@ -143,6 +228,11 @@
       document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
       document.getElementById(id).classList.add("active");
       document.querySelectorAll(".nav-item").forEach(btn => btn.classList.remove("active"));
+      if (id === "camera") {
+        startCamera();
+      } else {
+        stopCamera();
+      }
     }
     loadObjects();
   </script>
