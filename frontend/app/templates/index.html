@@ -38,12 +38,23 @@
       </div>
 
       <p id="capture-count">0 / 4 images captured</p>
+        <div class="camera-controls">
+          <!--<button class="round-button count-button" disabled>
+            <span id="capture-number">0</span>
+          </button>-->
 
-      <button onclick="startCamera()">Start Camera</button>
+          <button class="capture-button" onclick="captureImage()"></button>
+
+          <button class="round-button" onclick="continueToProcessing()">
+            →
+          </button>
+        </div>
+
+      <!-- <button onclick="startCamera()">Start Camera</button>
       <button onclick="captureImage()">Capture</button>
       <button onclick="continueToProcessing()">Continue</button>
 
-      <div id="preview-row"></div>
+      <div id="preview-row"></div> -->
     </section>
 
     <!-- Processing -->
