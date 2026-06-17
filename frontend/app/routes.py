@@ -37,7 +37,7 @@ def store_objects():
 
 @main_bp.get("/api/gallery-objects")
 def gallery_objects():
-    return jsonify(DEMO_OBJECTS)
+    return jsonify([])
 
 
 # @main_bp.post("/api/example")
