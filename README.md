@@ -1,6 +1,6 @@
 # playground_connector
 
-Lorem Ipsum
+Building a web-based AR application for creating, storing, and viewing Gaussian Splat objects
 
 # Frontend Flask Server Setup
 
