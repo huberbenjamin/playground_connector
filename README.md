@@ -1,6 +1,6 @@
 # playground_connector
 
-Building a web-based AR application for creating, storing, and viewing Gaussian Splat objects
+Building a web-based pipeline that allows users to capture physical objects, reconstruct them as Gaussian Splats, store them in a personal gallery, and visualize them in AR directly from a mobile device.
 
 # Frontend Flask Server Setup
 
