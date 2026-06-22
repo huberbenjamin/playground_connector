@@ -1,0 +1,90 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #111;
+}
+
+#demo-page {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+#ar-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+#ar-control-panel {
+  position: fixed;
+  z-index: 10;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+#ar-control-panel button,
+#ar-control-panel p {
+  pointer-events: auto;
+}
+
+#ar-control-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#ar-control-panel button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#ar-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: white;
+  background: rgba(0, 0, 0, 0.65);
+  font-size: 14px;
+}
+
+#ar-container video {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 0 !important;
+}
+
+#ar-container canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  background: transparent !important;
+  z-index: 1 !important;
+}
+
+#ar-container {
+  background: transparent !important;
+}

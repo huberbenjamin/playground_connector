@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindAR SOG Demo Playground</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/demo_playground.css') }}" />
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "{{ url_for('static', filename='js/three-shim.js') }}",
+      "three-real": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js",
+      "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"
+    }
+  }
+  </script>
+
+  <script>
+    window.DEMO_AR_CONFIG = {
+      mindFileUrl: "{{ url_for('static', filename='assets/demo/targets.mind') }}",
+      objectAUrl: "{{ url_for('static', filename='assets/demo/extracted_001.sog') }}",
+      objectBUrl: "{{ url_for('static', filename='assets/demo/extracted_001.sog') }}",
+      maxTrack: 1
+    };
+  </script>
+
+  <script type="module" src="{{ url_for('static', filename='js/demo_playground.js') }}"></script>
+</head>
+
+<body>
+  <main id="demo-page">
+    <section id="ar-container"></section>
+
+    <section id="ar-control-panel">
+      <button id="start-ar" type="button">Start AR</button>
+      <button id="stop-ar" type="button" disabled>Stop AR</button>
+      <p id="ar-status">Ready. Point the camera at marker 0 or marker 1.</p>
+    </section>
+  </main>
+</body>
+</html>

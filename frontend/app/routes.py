@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, render_template, url_for
+from flask import Blueprint, render_template, jsonify, request, url_for
 
 main_bp = Blueprint("main", __name__)
 
@@ -24,6 +24,10 @@ def index():
 @main_bp.get("/ar")
 def ar_index():
     return render_template("index.html")
+
+@main_bp.get("/ar/demo-playground.html")
+def demo_playground():
+    return render_template("demo_playground.html")
 
 @main_bp.get("/ar/viewer")
 def ar_viewer():
