@@ -1,3 +1,6 @@
 frontend/.venv
 frontend/app/__pycache__
+frontend/app/static/assets
 .DS_Store
+*.sog
+*.DS_Store
