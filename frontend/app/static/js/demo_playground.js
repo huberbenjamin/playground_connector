@@ -25,8 +25,14 @@ const tabButtons = document.querySelectorAll(".tab-button");
 
 const markerCount = config.markerCount ?? 6;
 const maxTrack = config.maxTrack ?? 2;
-const demoObjects = config.demoObjects ?? [];
-const galleryObjects = config.galleryObjects ?? [];
+const legacyDemoObjects = Array.isArray(config.demoObjects) ? config.demoObjects : [];
+const configuredGalleryObjects = Array.isArray(config.galleryObjects) ? config.galleryObjects : [];
+
+// Single-library mode. For now, the old demo objects are treated as Gallery objects.
+// Later your backend can fill galleryObjects with user-owned objects.
+const galleryObjects = configuredGalleryObjects.length > 0
+  ? configuredGalleryObjects
+  : legacyDemoObjects;
 
 let mindarThree = null;
 let renderer = null;
@@ -35,11 +41,12 @@ let camera = null;
 let hasSetup = false;
 let isRunning = false;
 let activeMarkerIndex = 0;
-let activeTab = "demo";
 let isLogVisible = false;
 
 const markerStates = new Map();
 const visibleMarkers = new Set();
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
 
 const STORAGE_ASSIGNMENTS_KEY = "demoPlayground.markerAssignments.v1";
 const STORAGE_TRANSFORM_PREFIX = "demoPlayground.markerTransform.";
@@ -55,7 +62,9 @@ const gestureState = {
   startRotationY: 0,
   startRotationZ: 0,
   startQuaternion: new THREE.Quaternion(),
-  twistAxis: new THREE.Vector3(0, 0, 1)
+  twistAxis: new THREE.Vector3(0, 0, 1),
+  hasMoved: false,
+  startTime: 0
 };
 
 function resetGestureState() {
@@ -70,6 +79,8 @@ function resetGestureState() {
   gestureState.startRotationZ = 0;
   gestureState.startQuaternion.identity();
   gestureState.twistAxis.set(0, 0, 1);
+  gestureState.hasMoved = false;
+  gestureState.startTime = 0;
 }
 
 let assignments = loadAssignments();
@@ -141,15 +152,11 @@ function transformStorageKey(markerIndex) {
 }
 
 function getAllObjects() {
-  return [
-    ...demoObjects.map((object) => ({ ...object, source: "demo" })),
-    ...galleryObjects.map((object) => ({ ...object, source: "gallery" }))
-  ];
+  return galleryObjects.map((object) => ({ ...object, source: "gallery" }));
 }
 
-function getObjectsForActiveTab() {
-  if (activeTab === "gallery") return galleryObjects.map((object) => ({ ...object, source: "gallery" }));
-  return demoObjects.map((object) => ({ ...object, source: "demo" }));
+function getObjectsForCollection() {
+  return getAllObjects();
 }
 
 function findObjectById(objectId) {
@@ -250,8 +257,13 @@ function getAssignedMarkerIndex(objectId) {
   return assignments.findIndex((assignedObjectId) => assignedObjectId === objectId);
 }
 
-function getNextEmptyMarkerIndex() {
-  return assignments.findIndex((objectId) => objectId === null);
+function getNextEmptyMarkerIndex(startAfter = -1) {
+  for (let offset = 1; offset <= markerCount; offset += 1) {
+    const markerIndex = (startAfter + offset + markerCount) % markerCount;
+    if (assignments[markerIndex] === null) return markerIndex;
+  }
+
+  return -1;
 }
 
 function getMarkerDisplayName(markerIndex) {
@@ -260,11 +272,17 @@ function getMarkerDisplayName(markerIndex) {
   return object?.name ?? "Empty";
 }
 
-function setActiveMarker(markerIndex) {
+function setActiveMarker(markerIndex, options = {}) {
+  const { silent = false } = options;
+
   activeMarkerIndex = clamp(markerIndex, 0, markerCount - 1);
   updateTransformReadout();
   renderMarkerSlots();
-  setStatus(`Editing marker ${activeMarkerIndex}.`);
+  renderObjectCollection();
+
+  if (!silent) {
+    setStatus(`Editing marker ${activeMarkerIndex}.`);
+  }
 }
 
 function syncTransformFromGroup(markerState) {
@@ -355,11 +373,13 @@ function renderMarkerSlots() {
 function createObjectCard(object) {
   const assignedMarkerIndex = getAssignedMarkerIndex(object.id);
   const isAssigned = assignedMarkerIndex !== -1;
+  const isSelectedForActiveMarker = assignments[activeMarkerIndex] === object.id;
 
   const card = document.createElement("button");
   card.type = "button";
   card.className = "object-card";
   card.classList.toggle("assigned", isAssigned);
+  card.classList.toggle("selected", isSelectedForActiveMarker);
   card.dataset.objectId = object.id;
 
   const image = document.createElement("img");
@@ -381,7 +401,14 @@ function createObjectCard(object) {
 
   const badge = document.createElement("span");
   badge.className = "object-card-badge";
-  badge.textContent = isAssigned ? `M${assignedMarkerIndex}` : "+";
+
+  if (isSelectedForActiveMarker) {
+    badge.textContent = "✓";
+  } else if (isAssigned) {
+    badge.textContent = `M${assignedMarkerIndex}`;
+  } else {
+    badge.textContent = "+";
+  }
 
   card.appendChild(fallback);
   card.appendChild(image);
@@ -389,7 +416,7 @@ function createObjectCard(object) {
   card.appendChild(badge);
 
   card.addEventListener("click", () => {
-    assignObjectBySelectionOrder(object.id);
+    toggleObjectForActiveMarker(object.id);
   });
 
   return card;
@@ -398,14 +425,12 @@ function createObjectCard(object) {
 function renderObjectCollection() {
   objectCollection.innerHTML = "";
 
-  const objects = getObjectsForActiveTab();
+  const objects = getObjectsForCollection();
 
   if (objects.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-collection";
-    empty.textContent = activeTab === "gallery"
-      ? "Gallery is empty for now. Later you can fill this from your backend."
-      : "No demo objects configured.";
+    empty.textContent = "Gallery is empty for now. Later you can fill this from your backend.";
     objectCollection.appendChild(empty);
     return;
   }
@@ -416,8 +441,9 @@ function renderObjectCollection() {
 }
 
 function renderTabs() {
+  // Tabs were removed. Keep this as a no-op so older HTML does not break.
   tabButtons.forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === activeTab);
+    button.classList.toggle("active", button.dataset.tab === "gallery");
   });
 }
 
@@ -496,46 +522,60 @@ async function syncAllMarkerObjects() {
   await Promise.all(assignments.map((_, markerIndex) => updateMarkerObject(markerIndex)));
 }
 
-async function assignObjectToMarker(objectId, markerIndex) {
+async function assignObjectToMarker(objectId, markerIndex, options = {}) {
+  const { advanceToNextEmpty = false } = options;
   const object = findObjectById(objectId);
   if (!object) return;
 
+  const targetMarkerIndex = clamp(markerIndex, 0, markerCount - 1);
   const previouslyAssignedMarker = getAssignedMarkerIndex(objectId);
-  if (previouslyAssignedMarker !== -1 && previouslyAssignedMarker !== markerIndex) {
+
+  if (previouslyAssignedMarker !== -1 && previouslyAssignedMarker !== targetMarkerIndex) {
     assignments[previouslyAssignedMarker] = null;
     if (hasSetup) removeSplatFromMarker(previouslyAssignedMarker);
   }
 
-  assignments[markerIndex] = objectId;
+  assignments[targetMarkerIndex] = objectId;
   saveAssignments();
-  setActiveMarker(markerIndex);
   renderPickerUi();
 
   if (hasSetup) {
-    await updateMarkerObject(markerIndex);
-  } else {
-    setStatus(`${object.name} will load on marker ${markerIndex} when AR starts.`);
+    await updateMarkerObject(targetMarkerIndex);
   }
+
+  if (advanceToNextEmpty) {
+    const nextEmptyMarker = getNextEmptyMarkerIndex(targetMarkerIndex);
+
+    if (nextEmptyMarker !== -1) {
+      setActiveMarker(nextEmptyMarker, { silent: true });
+      setStatus(`${object.name} assigned to marker ${targetMarkerIndex}. Next empty marker: ${nextEmptyMarker}.`);
+      return;
+    }
+  }
+
+  setActiveMarker(targetMarkerIndex, { silent: true });
+  setStatus(`${object.name} assigned to marker ${targetMarkerIndex}.`);
+}
+
+async function toggleObjectForActiveMarker(objectId) {
+  const object = findObjectById(objectId);
+  if (!object) return;
+
+  const currentObjectId = assignments[activeMarkerIndex];
+
+  // Tap the currently selected object again to deselect it from this marker.
+  if (currentObjectId === objectId) {
+    clearMarkerAssignment(activeMarkerIndex);
+    setStatus(`${object.name} deselected from marker ${activeMarkerIndex}.`);
+    return;
+  }
+
+  await assignObjectToMarker(objectId, activeMarkerIndex, { advanceToNextEmpty: true });
 }
 
 async function assignObjectBySelectionOrder(objectId) {
-  const alreadyAssignedMarker = getAssignedMarkerIndex(objectId);
-
-  if (alreadyAssignedMarker !== -1) {
-    setActiveMarker(alreadyAssignedMarker);
-    setStatus(`${findObjectById(objectId)?.name ?? "Object"} is already assigned to marker ${alreadyAssignedMarker}.`);
-    return;
-  }
-
-  const emptyMarker = getNextEmptyMarkerIndex();
-
-  if (emptyMarker !== -1) {
-    await assignObjectToMarker(objectId, emptyMarker);
-    return;
-  }
-
-  // When all 6 are full, replace the currently selected marker.
-  await assignObjectToMarker(objectId, activeMarkerIndex);
+  // Legacy name kept for compatibility. New behavior is marker-slot driven.
+  await toggleObjectForActiveMarker(objectId);
 }
 
 function clearMarkerAssignment(markerIndex) {
@@ -637,6 +677,41 @@ function getActiveMarkerState() {
   return markerStates.get(activeMarkerIndex);
 }
 
+function getMarkerStateFromScreenPoint(clientX, clientY) {
+  if (!camera || !renderer) return null;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+
+  pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -(((clientY - rect.top) / rect.height) * 2 - 1);
+
+  raycaster.setFromCamera(pointer, camera);
+
+  const hitboxes = [];
+  markerStates.forEach((markerState) => {
+    if (markerState.group?.visible && markerState.objectId && markerState.hitbox) {
+      hitboxes.push(markerState.hitbox);
+    }
+  });
+
+  const hits = raycaster.intersectObjects(hitboxes, false);
+  if (hits.length === 0) return null;
+
+  const markerIndex = Number(hits[0].object.userData.markerIndex);
+  return markerStates.get(markerIndex) ?? null;
+}
+
+function selectMarkerFromScreenPoint(clientX, clientY) {
+  const markerState = getMarkerStateFromScreenPoint(clientX, clientY);
+  if (!markerState) return false;
+
+  const markerIndex = markerState.markerIndex;
+  setActiveMarker(markerIndex, { silent: true });
+  setStatus(`Selected marker ${markerIndex} from AR object.`);
+  return true;
+}
+
 function handleTouchStart(event) {
   if (shouldIgnoreGesture(event)) return;
 
@@ -653,6 +728,8 @@ function handleTouchStart(event) {
     gestureState.mode = "rotate";
     gestureState.startX = touch.clientX;
     gestureState.startY = touch.clientY;
+    gestureState.hasMoved = false;
+    gestureState.startTime = performance.now();
     gestureState.startRotationX = markerState.transform.rotationX;
     gestureState.startRotationY = markerState.transform.rotationY;
     gestureState.startRotationZ = markerState.transform.rotationZ;
@@ -664,6 +741,8 @@ function handleTouchStart(event) {
     syncTransformFromGroup(markerState);
 
     gestureState.mode = "pinch";
+    gestureState.hasMoved = false;
+    gestureState.startTime = performance.now();
     gestureState.startDistance = distanceBetweenTouches(touchA, touchB);
     gestureState.startAngle = angleBetweenTouches(touchA, touchB);
     gestureState.startScale = markerState.transform.scale;
@@ -688,6 +767,10 @@ function handleTouchMove(event) {
     const deltaX = touch.clientX - gestureState.startX;
     const deltaY = touch.clientY - gestureState.startY;
 
+    if (Math.hypot(deltaX, deltaY) > 8) {
+      gestureState.hasMoved = true;
+    }
+
     markerState.transform.rotationY = gestureState.startRotationY + deltaX * 0.45;
     markerState.transform.rotationX = gestureState.startRotationX + deltaY * 0.45;
     markerState.transform.rotationZ = gestureState.startRotationZ;
@@ -702,6 +785,10 @@ function handleTouchMove(event) {
     // Pinch scale.
     const currentDistance = distanceBetweenTouches(touchA, touchB);
     const scaleFactor = currentDistance / gestureState.startDistance;
+
+    if (Math.abs(currentDistance - gestureState.startDistance) > 6) {
+      gestureState.hasMoved = true;
+    }
     markerState.transform.scale = clamp(gestureState.startScale * scaleFactor, 0.05, 20);
     markerState.group.scale.setScalar(markerState.transform.scale);
 
@@ -709,6 +796,10 @@ function handleTouchMove(event) {
     // the camera/user when the gesture started, instead of always using Z.
     const currentAngle = angleBetweenTouches(touchA, touchB);
     const angleDelta = currentAngle - gestureState.startAngle;
+
+    if (Math.abs(angleDelta) > degToRad(3)) {
+      gestureState.hasMoved = true;
+    }
 
     markerState.group.quaternion.copy(gestureState.startQuaternion);
     markerState.group.rotateOnAxis(gestureState.twistAxis, -angleDelta); // - to invert the rotation
@@ -726,8 +817,21 @@ function handleTouchEnd(event) {
   if (shouldIgnoreGesture(event)) return;
 
   if (gestureState.mode) {
-    saveTransform(activeMarkerIndex, { silent: true });
-    setStatus(`Updated transform for marker ${activeMarkerIndex}.`);
+    const changedTouch = event.changedTouches?.[0];
+    const isQuickTap = gestureState.mode === "rotate" &&
+      !gestureState.hasMoved &&
+      changedTouch &&
+      performance.now() - gestureState.startTime < 450;
+
+    if (isQuickTap && selectMarkerFromScreenPoint(changedTouch.clientX, changedTouch.clientY)) {
+      resetGestureState();
+      return;
+    }
+
+    if (gestureState.hasMoved) {
+      saveTransform(activeMarkerIndex, { silent: true });
+      setStatus(`Updated transform for marker ${activeMarkerIndex}.`);
+    }
   }
 
   resetGestureState();
@@ -752,14 +856,27 @@ function createEmptyMarkerStates() {
     const group = new THREE.Group();
     const transform = loadTransform(markerIndex);
 
+    const hitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.4, 1.4),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false
+      })
+    );
+    hitbox.userData.markerIndex = markerIndex;
+    group.add(hitbox);
+
     // Keep objects hidden until their marker is actually found.
     group.visible = false;
 
     anchor.group.add(group);
 
     const markerState = {
+      markerIndex,
       anchor,
       group,
+      hitbox,
       transform,
       splat: null,
       objectId: null,
@@ -772,8 +889,7 @@ function createEmptyMarkerStates() {
     anchor.onTargetFound = () => {
       group.visible = true;
       visibleMarkers.add(markerIndex);
-      setActiveMarker(markerIndex);
-      setStatus(`Marker ${markerIndex} found.`);
+      setStatus(`Marker ${markerIndex} found. Tap its object to edit this marker.`);
     };
 
     anchor.onTargetLost = () => {
@@ -848,9 +964,9 @@ async function setupMindAR() {
     container: arContainer,
     imageTargetSrc: config.mindFileUrl,
     maxTrack: maxTrack,
-    filterMinCF: 0.001,
-    filterBeta: 0.01,
-    missTolerance: 10
+    // filterMinCF: 0.001,
+    // filterBeta: 0.01,
+    // missTolerance: 10
   });
 
   ({ renderer, scene, camera } = mindarThree);
@@ -959,7 +1075,6 @@ drawerToggle.addEventListener("click", () => {
 
 tabButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    activeTab = button.dataset.tab;
     renderPickerUi();
   });
 });

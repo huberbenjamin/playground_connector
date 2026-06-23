@@ -295,8 +295,13 @@ body {
 }
 
 .object-card.assigned {
-  outline: 3px solid rgba(255, 255, 255, 0.48);
+  outline: 2px solid rgba(255, 255, 255, 0.34);
   background: rgba(255, 255, 255, 0.17);
+}
+
+.object-card.selected {
+  outline: 3px solid rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 .object-thumb,
@@ -395,4 +400,9 @@ body {
   .object-thumb-fallback {
     height: 86px;
   }
+}
+
+/* Single-gallery mode: kept safe in case an old template still has tabs. */
+#object-tabs {
+  display: none;
 }

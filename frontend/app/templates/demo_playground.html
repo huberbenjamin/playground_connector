@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>MindAR SOG Demo Playground</title>
+  <title>MindAR SOG Gallery Playground</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/demo_playground.css') }}" />
 
@@ -25,10 +25,10 @@
   <script>
     window.DEMO_AR_CONFIG = {
       mainPageUrl: "{{ url_for('main.ar_index') }}",
-      mindFileUrl: "{{ url_for('static', filename='assets/demo/targets.mind') }}",
-      markerCount: 1, // 6,
-      maxTrack: 1,
-      demoObjects: [
+      mindFileUrl: "{{ url_for('static', filename='assets/targets.mind') }}",
+      markerCount: 6,// 6,
+      maxTrack: 2,
+      galleryObjects: [
         {
           id: "demo-01",
           name: "Demo 01",
@@ -101,8 +101,7 @@
         //   url: "{{ url_for('static', filename='assets/demo/object12.sog') }}",
         //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object12.jpg') }}"
         // }
-      ],
-      galleryObjects: []
+      ]
     };
   </script>
 
@@ -133,18 +132,14 @@
 
       <header id="drawer-header">
         <div>
-          <h2>Choose objects</h2>
-          <p>Selection order assigns objects to marker 0 → marker 5.</p>
+          <h2>Gallery</h2>
+          <p>Select a marker slot, then tap an object to assign or deselect it.</p>
         </div>
         <button id="clear-assignments" type="button">Clear all</button>
       </header>
 
       <div id="marker-slot-row" aria-label="Assigned marker slots"></div>
 
-      <nav id="object-tabs" aria-label="Object source tabs">
-        <button class="tab-button active" type="button" data-tab="demo">Demo</button>
-        <button class="tab-button" type="button" data-tab="gallery">Gallery</button>
-      </nav>
 
       <div id="object-collection" aria-label="Objects"></div>
     </section>
