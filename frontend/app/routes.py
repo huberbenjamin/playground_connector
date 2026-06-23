@@ -8,10 +8,12 @@ DEMO_OBJECTS = [
         "name": "Demo Object",
         "createdAt": "2026-06-12",
         "files": [
-            "/static/assets/demo/extracted_001.sog",
-            "/static/assets/demo/extracted_002.sog",
-            "/static/assets/demo/extracted_003.sog",
-            "/static/assets/demo/extracted_004.sog",
+            "/static/assets/demo/object01.sog",
+            "/static/assets/demo/object02.sog",
+            "/static/assets/demo/object03.sog",
+            "/static/assets/demo/object04.sog",
+            "/static/assets/demo/object05.sog",
+            "/static/assets/demo/object06.sog",
         ],
     }
 ]
