@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserState {
+  PREGENERATED
+  ACTIVE
+  REMOVED
+}
+
+enum ObjectType {
+  PUBLIC
+  EXCLUSIVE
+  ADMIN
+}
+
+model User {
+  id          String    @id @db.VarChar(6)
+  state       UserState @default(PREGENERATED)
+  coins       Int       @default(10)
+  activatedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  ownerships     ObjectOwner[]
+  createdObjects MarketplaceObject[] @relation("ObjectCreator")
+
+  @@index([state, activatedAt])
+}
+
+model MarketplaceObject {
+  objectId      String     @id @default(uuid()) @db.Uuid
+  title         String
+  description   String
+  creatorUserId String     @db.VarChar(6)
+  sogPath       String
+  thumbnailPath String
+  type          ObjectType
+  createdAt     DateTime   @default(now())
+
+  creator User          @relation("ObjectCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  owners  ObjectOwner[]
+
+  @@index([type])
+  @@index([creatorUserId])
+  @@map("objects")
+}
+
+model ObjectOwner {
+  objectId   String   @db.Uuid
+  userId     String   @db.VarChar(6)
+  ownedSince DateTime @default(now())
+
+  object MarketplaceObject @relation(fields: [objectId], references: [objectId], onDelete: Cascade)
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([objectId, userId])
+  @@index([userId])
+  @@index([objectId, ownedSince])
+  @@map("object_owners")
+}

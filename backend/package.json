@@ -1,0 +1,27 @@
+{
+  "name": "marketplace-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@marketplace/shared-types && npm run build --workspace=@marketplace/api",
+    "dev:api": "npm run dev --workspace=@marketplace/api",
+    "dev:python": "cd apps/python-generator && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8001",
+    "start:api": "npm run start:prod --workspace=@marketplace/api",
+    "db:migrate": "npm run db:migrate --workspace=@marketplace/api",
+    "db:generate": "npm run db:generate --workspace=@marketplace/api",
+    "db:seed": "npm run db:seed --workspace=@marketplace/api"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "overrides": {
+    "multer": "^2.2.0",
+    "js-yaml": "^4.2.0",
+    "path-to-regexp": "^8.4.2",
+    "uuid": "^11.1.0"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+storage/sog/*
+storage/thumbnails/*
+!storage/sog/.gitkeep
+!storage/thumbnails/.gitkeep
+*.pyc
+__pycache__/
+.venv/
+apps/python-generator/.venv/
