@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MindAR SOG Demo Playground</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/demo_playground.css') }}" />
+
+  <!-- Import-map shim helps older iOS Safari versions. -->
+  <script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+
+  <script type="importmap-shim">
+  {
+    "imports": {
+      "three": "{{ url_for('static', filename='js/three-shim.js') }}",
+      "three-real": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js",
+      "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"
+    }
+  }
+  </script>
+
+  <script>
+    window.DEMO_AR_CONFIG = {
+      mainPageUrl: "{{ url_for('main.ar_index') }}",
+      mindFileUrl: "{{ url_for('static', filename='assets/demo/targets.mind') }}",
+      markerCount: 1, // 6,
+      maxTrack: 1,
+      demoObjects: [
+        {
+          id: "demo-01",
+          name: "Demo 01",
+          url: "{{ url_for('static', filename='assets/demo/object01.sog') }}",
+          thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object01.jpg') }}"
+        },
+        {
+          id: "demo-02",
+          name: "Demo 02",
+          url: "{{ url_for('static', filename='assets/demo/object02.sog') }}",
+          thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object02.jpg') }}"
+        },
+        {
+          id: "demo-03",
+          name: "Demo 03",
+          url: "{{ url_for('static', filename='assets/demo/object03.sog') }}",
+          thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object03.jpg') }}"
+        },
+        {
+          id: "demo-04",
+          name: "Demo 04",
+          url: "{{ url_for('static', filename='assets/demo/object04.sog') }}",
+          thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object04.jpg') }}"
+        },
+        {
+          id: "demo-05",
+          name: "Demo 05",
+          url: "{{ url_for('static', filename='assets/demo/object05.sog') }}",
+          thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object05.jpg') }}"
+        },
+        {
+          id: "demo-06",
+          name: "Demo 06",
+          url: "{{ url_for('static', filename='assets/demo/object06.sog') }}",
+          thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object06.jpg') }}"
+        },
+        // {
+        //   id: "demo-07",
+        //   name: "Demo 07",
+        //   url: "{{ url_for('static', filename='assets/demo/object07.sog') }}",
+        //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object07.jpg') }}"
+        // },
+        // {
+        //   id: "demo-08",
+        //   name: "Demo 08",
+        //   url: "{{ url_for('static', filename='assets/demo/object08.sog') }}",
+        //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object08.jpg') }}"
+        // },
+        // {
+        //   id: "demo-09",
+        //   name: "Demo 09",
+        //   url: "{{ url_for('static', filename='assets/demo/object09.sog') }}",
+        //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object09.jpg') }}"
+        // },
+        // {
+        //   id: "demo-10",
+        //   name: "Demo 10",
+        //   url: "{{ url_for('static', filename='assets/demo/object10.sog') }}",
+        //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object10.jpg') }}"
+        // },
+        // {
+        //   id: "demo-11",
+        //   name: "Demo 11",
+        //   url: "{{ url_for('static', filename='assets/demo/object11.sog') }}",
+        //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object11.jpg') }}"
+        // },
+        // {
+        //   id: "demo-12",
+        //   name: "Demo 12",
+        //   url: "{{ url_for('static', filename='assets/demo/object12.sog') }}",
+        //   thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object12.jpg') }}"
+        // }
+      ],
+      galleryObjects: []
+    };
+  </script>
+
+  <script type="module-shim" src="{{ url_for('static', filename='js/demo_playground.js') }}"></script>
+</head>
+
+<body>
+  <main id="demo-page">
+    <section id="ar-container" aria-label="AR camera view"></section>
+
+    <section id="ar-control-panel" aria-label="AR controls">
+      <a id="back-button" href="{{ url_for('main.ar_index') }}">←</a>
+      <button id="start-ar" type="button">Start AR</button>
+      <button id="stop-ar" type="button" disabled>Stop AR</button>
+      <button id="save-transform" type="button">Save</button>
+      <button id="reset-transform" type="button">Reset</button>
+      <button id="toggle-log" type="button" aria-pressed="true">▶</button>
+
+      <p id="ar-status" class="is-hidden">Ready. Select up to 6 objects, then tap Start AR.</p>
+      <p id="gesture-hint" class="is-hidden">Selected marker: <strong id="active-marker-label">0</strong> · 1 finger rotate · 2 fingers pinch/twist</p>
+      <p id="transform-readout" class="is-hidden">Marker 0 · scale 1.50 · rot X -90° Y 0° Z 0°</p>
+    </section>
+
+    <button id="drawer-toggle" type="button" aria-controls="object-drawer" aria-expanded="false">⌃ Objects</button>
+
+    <section id="object-drawer" class="collapsed" aria-label="Object picker">
+      <div id="drawer-grabber" aria-hidden="true"></div>
+
+      <header id="drawer-header">
+        <div>
+          <h2>Choose objects</h2>
+          <p>Selection order assigns objects to marker 0 → marker 5.</p>
+        </div>
+        <button id="clear-assignments" type="button">Clear all</button>
+      </header>
+
+      <div id="marker-slot-row" aria-label="Assigned marker slots"></div>
+
+      <nav id="object-tabs" aria-label="Object source tabs">
+        <button class="tab-button active" type="button" data-tab="demo">Demo</button>
+        <button class="tab-button" type="button" data-tab="gallery">Gallery</button>
+      </nav>
+
+      <div id="object-collection" aria-label="Objects"></div>
+    </section>
+  </main>
+</body>
+</html>

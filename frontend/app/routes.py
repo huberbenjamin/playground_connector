@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, render_template, url_for
+from flask import Blueprint, render_template, jsonify, request, url_for
 
 main_bp = Blueprint("main", __name__)
 
@@ -8,10 +8,12 @@ DEMO_OBJECTS = [
         "name": "Demo Object",
         "createdAt": "2026-06-12",
         "files": [
-            "/static/assets/demo/extracted_001.sog",
-            "/static/assets/demo/extracted_002.sog",
-            "/static/assets/demo/extracted_003.sog",
-            "/static/assets/demo/extracted_004.sog",
+            "/static/assets/demo/object01.sog",
+            "/static/assets/demo/object02.sog",
+            "/static/assets/demo/object03.sog",
+            "/static/assets/demo/object04.sog",
+            "/static/assets/demo/object05.sog",
+            "/static/assets/demo/object06.sog",
         ],
     }
 ]
@@ -24,6 +26,10 @@ def index():
 @main_bp.get("/ar")
 def ar_index():
     return render_template("index.html")
+
+@main_bp.get("/ar/demo-playground.html")
+def demo_playground():
+    return render_template("demo_playground.html")
 
 @main_bp.get("/ar/viewer")
 def ar_viewer():

@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from .config import Config
 from .routes import main_bp
 
-
 def create_app():
     load_dotenv()
 

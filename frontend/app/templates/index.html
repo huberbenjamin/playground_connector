@@ -69,7 +69,9 @@
     <section id="ar" class="screen">
       <h1>AR View</h1>
       <div class="ar-placeholder">
-        Select an object from Gallery first
+        <a href="{{ url_for('main.demo_playground') }}">
+          Open Demo Playground
+      </a>
       </div>
     </section>
   </div>
@@ -272,4 +274,4 @@
 <footer class="credits">
   Made with
   <a href="https:/
-  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
