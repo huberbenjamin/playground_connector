@@ -35,7 +35,7 @@ def demo_playground():
 def ar_viewer():
     object_id = request.args.get("object", "extracted_001") #demo obj
     selected = next((obj for obj in DEMO_OBJECTS if obj["id"] == object_id), DEMO_OBJECTS[0]) #demo obj
-    return render_template("viewer.html", selected_object=selected)
+    return render_template("demo_playground.html", selected_object=selected)
 
 @main_bp.get("/api/store-objects")
 def store_objects():
