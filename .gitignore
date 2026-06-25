@@ -4,3 +4,12 @@ frontend/app/static/assets
 .DS_Store
 *.sog
 *.DS_Store
+# Heavy 3D assets, models, and outputs
+**/object_extraction/pretrained/
+**/object_extraction/extracted_output/
+**/object_extraction/extracted_output_cleaned/
+**/object_extraction/output_assets/
+
+# Large Model Repositories / Submodules
+**/object_extraction/FreeSplatter/
+**/object_extraction/LGM/
