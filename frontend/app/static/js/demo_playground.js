@@ -24,9 +24,12 @@ const objectCollection = document.querySelector("#object-collection");
 const tabButtons = document.querySelectorAll(".tab-button");
 
 const markerCount = config.markerCount ?? 6;
-const maxTrack = config.maxTrack ?? 2;
 const legacyDemoObjects = Array.isArray(config.demoObjects) ? config.demoObjects : [];
 const configuredGalleryObjects = Array.isArray(config.galleryObjects) ? config.galleryObjects : [];
+
+const multitrackButton = document.querySelector("#multitrack-button");
+const MULTITRACK_STORAGE_KEY = "demo-playground-enable-multi-track";
+let currentMaxTrack = Number(localStorage.getItem(MULTITRACK_STORAGE_KEY)) || 1;
 
 // Single-library mode. For now, the old demo objects are treated as Gallery objects.
 // Later your backend can fill galleryObjects with user-owned objects.
@@ -963,10 +966,11 @@ async function setupMindAR() {
   mindarThree = new MindARThree({
     container: arContainer,
     imageTargetSrc: config.mindFileUrl,
-    maxTrack: maxTrack,
-    // filterMinCF: 0.001,
-    // filterBeta: 0.01,
-    // missTolerance: 10
+    maxTrack: currentMaxTrack,
+    filterMinCF: 0.0001,
+    filterBeta: 0.001,
+    warmupTolerance: 5,
+    missTolerance: 10
   });
 
   ({ renderer, scene, camera } = mindarThree);
@@ -991,6 +995,53 @@ async function setupMindAR() {
   renderPickerUi();
 }
 
+function updateMultitrackButtonLabel() {
+  if (![1, 2, 3, 4].includes(currentMaxTrack)) {
+    currentMaxTrack = 1;
+  }
+
+  multitrackButton.textContent = `MT ${currentMaxTrack}`;
+}
+
+updateMultitrackButtonLabel();
+
+function confirmMaxTrackIncrease() {
+  if (currentMaxTrack === 1 || currentMaxTrack === 4) return true;
+
+  const message = `Further increasing max tracked markers may reduce performance on some devices. Continue?`;
+  return window.confirm(message);
+}
+
+multitrackButton.addEventListener("click", async () => {
+  if(confirmMaxTrackIncrease()) {
+    if (currentMaxTrack === 1) {
+      currentMaxTrack = 2;
+    } else if (currentMaxTrack === 2) {
+      currentMaxTrack = 3;
+    } else if (currentMaxTrack === 3) {
+      currentMaxTrack = 4;
+    } else {
+      currentMaxTrack = 1;
+    }
+  }
+
+  localStorage.setItem(MULTITRACK_STORAGE_KEY, String(currentMaxTrack));
+  updateMultitrackButtonLabel();
+
+  const wasRunning = isRunning;
+
+  if (wasRunning) {
+    await stopAR();
+  }
+
+  hasSetup = false;
+  mindarThree = null;
+
+  if (wasRunning) {
+    await startAR();
+  }
+});
+
 async function startAR() {
   if (isRunning) return;
 
@@ -1011,7 +1062,7 @@ async function startAR() {
 
     isRunning = true;
     stopButton.disabled = false;
-    setStatus(`AR running. ${markerCount} markers configured, max ${maxTrack} tracked at once.`);
+    setStatus(`AR running. ${markerCount} markers configured, max ${currentMaxTrack} tracked at once.`);
   } catch (error) {
     console.error("startAR failed:", error);
     isRunning = false;
