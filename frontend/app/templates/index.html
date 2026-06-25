@@ -500,12 +500,14 @@
       const requestUrl = `${API_BASE_URL}/admin/user-ids`;
       const status = document.getElementById("admin-users-status");
       const list = document.getElementById("admin-users-list");
+      const token = getToken();
 
       status.innerText = "Loading users…";
       status.style.display = "block";
       list.innerHTML = "";
 
       console.log("Admin users request URL:", requestUrl);
+      console.log("Admin users token present:", Boolean(token));
 
       try {
         const response = await fetch(requestUrl, {
@@ -516,12 +518,14 @@
         });
 
         console.log("Admin users response status:", response.status);
+        const responseText = await response.text();
+        console.log("Admin users response body:", responseText);
 
         if (!response.ok) {
           throw new Error(`Request failed with status ${response.status}.`);
         }
 
-        adminUsers = await response.json();
+        adminUsers = responseText ? JSON.parse(responseText) : [];
         console.log("Admin users parsed response:", adminUsers);
         renderAdminUsers();
       } catch (error) {
