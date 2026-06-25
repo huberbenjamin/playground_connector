@@ -73,4 +73,44 @@ export class StorageService {
   getAbsolutePath(relativePath: string): string {
     return path.join(this.root, relativePath);
   }
+
+  toPublicUrl(relativePath: string): string {
+    const normalized = relativePath.split(path.sep).join('/');
+    return `/files/${normalized}`;
+  }
+
+  resolveSafeRelativePath(folder: string, filename: string): string {
+    const allowedFolders = new Set(['sog', 'thumbnails']);
+    if (!allowedFolders.has(folder)) {
+      throw new Error('INVALID_STORAGE_FOLDER');
+    }
+
+    if (
+      !filename ||
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\')
+    ) {
+      throw new Error('INVALID_STORAGE_FILENAME');
+    }
+
+    return path.join(folder, filename);
+  }
+
+  getContentType(relativePath: string): string {
+    const extension = path.extname(relativePath).toLowerCase();
+    switch (extension) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.webp':
+        return 'image/webp';
+      case '.sog':
+        return 'application/octet-stream';
+      default:
+        return 'application/octet-stream';
+    }
+  }
 }

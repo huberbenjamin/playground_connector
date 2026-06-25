@@ -15,7 +15,7 @@ async function bootstrap(): Promise<void> {
       : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'ngrok-skip-browser-warning',],
   });
 
   app.useGlobalFilters(new AllExceptionsFilter());

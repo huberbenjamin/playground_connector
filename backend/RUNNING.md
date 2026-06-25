@@ -13,6 +13,8 @@
 backend/
 ├── apps/
 │   ├── api/                 # NestJS API
+│   │   └── prisma/
+│   │       └── seed-assets/ # Source files copied into storage during seed
 │   └── python-generator/    # FastAPI SOG generator mock
 ├── packages/
 │   └── shared-types/        # Shared TypeScript types
@@ -88,6 +90,7 @@ This will:
 4. Generate Prisma client
 5. Run migrations
 6. Seed the initial user pool (10 pregenerated IDs)
+7. Seed the default admin shop object (`Object 01`) from `apps/api/prisma/seed-assets/object01/`
 
 ### Manual database commands
 
@@ -215,7 +218,7 @@ curl http://localhost:3000/shop
 | `Invalid user ID` | Use a six-digit ID from `GET /admin/user-ids` |
 | Migration errors | Run `npm run db:migrate` from the repo root |
 | File storage errors | Ensure `storage/sog` and `storage/thumbnails` exist and are writable |
-| `OPTIONS` returns 404 via ngrok | Restart API after enabling CORS; ensure ngrok tunnels to the API port (default `3000`) |
+| `OPTIONS` returns 404 via ngrok | Restart API; ensure ngrok tunnels port `3000`; add `ngrok-skip-browser-warning: true` header in frontend |
 
 ## Exposing the API with ngrok
 
@@ -223,13 +226,49 @@ curl http://localhost:3000/shop
 ngrok http 3000
 ```
 
-Use the ngrok HTTPS URL as your frontend API base URL. CORS is enabled by default for all origins in development. To restrict origins, set `CORS_ORIGINS` in `.env`:
+Use the ngrok HTTPS URL as your frontend API base URL.
+
+### CORS + ngrok (important)
+
+If your frontend runs on `http://127.0.0.1:8080` and the API is behind ngrok, **every fetch** must include:
+
+```javascript
+headers: {
+  'Content-Type': 'application/json',
+  'ngrok-skip-browser-warning': 'true',
+}
+```
+
+Without `ngrok-skip-browser-warning`, ngrok returns an HTML warning page on the OPTIONS preflight — the browser then reports a CORS error even though the API is configured correctly.
+
+Example admin login:
+
+```javascript
+const response = await fetch(`${API_BASE}/login-admin`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+  },
+  body: JSON.stringify({ username: 'admin1', password: 'admin1pass' }),
+});
+```
+
+Optional: restrict origins via `.env`:
 
 ```
-CORS_ORIGINS="https://your-frontend.ngrok-free.app,http://localhost:5173"
+CORS_ORIGINS="http://127.0.0.1:8080,http://localhost:8080"
 ```
 
 Restart the API after changing `.env`.
+
+### Troubleshooting ngrok CORS
+
+| Symptom | Fix |
+|---|---|
+| `No Access-Control-Allow-Origin` on OPTIONS | Add `ngrok-skip-browser-warning: true` to fetch headers |
+| Still failing | Confirm ngrok tunnels port `3000` and the API is running |
+| 404 on OPTIONS | Restart API after pulling latest CORS changes |
 
 ## Coin Economy Summary
 

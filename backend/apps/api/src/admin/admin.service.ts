@@ -10,6 +10,7 @@ import {
   AdminUserResponseDto,
 } from './dto/admin.dto';
 import { ObjectResponseDto } from '../objects/dto/objects.dto';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class AdminService {
@@ -17,6 +18,7 @@ export class AdminService {
     private readonly usersService: UsersService,
     private readonly objectsRepository: ObjectsRepository,
     private readonly objectsService: ObjectsService,
+    private readonly storageService: StorageService,
   ) {}
 
   async getUserIds(): Promise<AdminUserIdResponseDto[]> {
@@ -47,8 +49,8 @@ export class AdminService {
       title: object.title,
       description: object.description,
       creatorUserId: object.creatorUserId,
-      sogPath: object.sogPath,
-      thumbnailPath: object.thumbnailPath,
+      sogUrl: this.storageService.toPublicUrl(object.sogPath),
+      thumbnailUrl: this.storageService.toPublicUrl(object.thumbnailPath),
       type: object.type,
       createdAt: object.createdAt.toISOString(),
     }));

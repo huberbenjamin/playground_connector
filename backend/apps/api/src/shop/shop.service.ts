@@ -10,12 +10,14 @@ import { ObjectsRepository } from '../objects/objects.repository';
 import { ShopItemResponseDto } from './dto/shop.dto';
 import { ObjectResponseDto } from '../objects/dto/objects.dto';
 import { ObjectsService } from '../objects/objects.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class ShopService {
   constructor(
     private readonly objectsRepository: ObjectsRepository,
     private readonly objectsService: ObjectsService,
+    private readonly storageService: StorageService,
   ) {}
 
   async getShopItems(): Promise<ShopItemResponseDto[]> {
@@ -25,7 +27,7 @@ export class ShopService {
       title: item.title,
       description: item.description,
       creatorUserId: item.creatorUserId,
-      thumbnailPath: item.thumbnailPath,
+      thumbnailUrl: this.storageService.toPublicUrl(item.thumbnailPath),
       type: item.type,
       createdAt: item.createdAt.toISOString(),
     }));

@@ -48,8 +48,8 @@ export interface ObjectResponse {
   title: string;
   description: string;
   creatorUserId: string;
-  sogPath: string;
-  thumbnailPath: string;
+  sogUrl: string;
+  thumbnailUrl: string;
   type: ObjectType;
   createdAt: string;
   ownedSince?: string;
@@ -60,7 +60,7 @@ export interface ShopItemResponse {
   title: string;
   description: string;
   creatorUserId: string;
-  thumbnailPath: string;
+  thumbnailUrl: string;
   type: ObjectType;
   createdAt: string;
 }
@@ -103,6 +103,8 @@ export interface GenerateSogResponse {
 }
 
 export const ADMIN_CREATOR_ID = '000000';
+export const SEED_DEFAULT_ADMIN_OBJECT_ID =
+  '00000000-0000-4000-8000-000000000001';
 export const USER_ID_PATTERN = /^\d{6}$/;
 export const MAX_ACTIVE_USERS = 10;
 export const INITIAL_USER_COINS = 10;

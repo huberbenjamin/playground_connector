@@ -4,7 +4,11 @@
     "target": "ES2021",
     "esModuleInterop": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@marketplace/shared-types": ["../../packages/shared-types/src/index.ts"]
+    }
   },
   "include": ["prisma/seed.ts"]
 }

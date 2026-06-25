@@ -21,11 +21,17 @@ export class ObjectResponseDto {
   @ApiProperty()
   creatorUserId!: string;
 
-  @ApiProperty()
-  sogPath!: string;
+  @ApiProperty({
+    description: 'Public HTTP path to download the SOG file',
+    example: '/files/sog/object01.sog',
+  })
+  sogUrl!: string;
 
-  @ApiProperty()
-  thumbnailPath!: string;
+  @ApiProperty({
+    description: 'Public HTTP path for the frontend image src',
+    example: '/files/thumbnails/object01.jpg',
+  })
+  thumbnailUrl!: string;
 
   @ApiProperty({ enum: ObjectType })
   type!: ObjectType;

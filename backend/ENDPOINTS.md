@@ -119,8 +119,8 @@ Authorization: Bearer <accessToken>
     "title": "My Object",
     "description": "Description",
     "creatorUserId": "123456",
-    "sogPath": "sog/file.sog",
-    "thumbnailPath": "thumbnails/file.jpg",
+    "sogUrl": "/files/sog/file.sog",
+    "thumbnailUrl": "/files/thumbnails/file.jpg",
     "type": "PUBLIC",
     "createdAt": "2025-06-23T12:00:00.000Z",
     "ownedSince": "2025-06-23T12:00:00.000Z"
@@ -231,7 +231,7 @@ Authorization: Bearer <accessToken>
     "title": "Shop Item",
     "description": "Description",
     "creatorUserId": "123456",
-    "thumbnailPath": "thumbnails/file.jpg",
+    "thumbnailUrl": "/files/thumbnails/file.jpg",
     "type": "PUBLIC",
     "createdAt": "2025-06-23T12:00:00.000Z"
   }
@@ -378,6 +378,38 @@ Base URL: `http://localhost:8001`
 - `500` — `WORKER_SECRET_TOKEN` not configured on the Python service
 
 **Note:** `GET /health` remains unauthenticated for liveness checks.
+
+---
+
+## File Downloads
+
+Stored assets live on the API server disk. API responses expose public URLs:
+
+- `thumbnailUrl` — shop / object preview image
+- `sogUrl` — downloadable 3D object file (owned objects)
+
+Prefix with your API base URL:
+
+```
+https://your-api.example.com/files/thumbnails/object01.jpg
+```
+
+### GET /files/:folder/:filename
+
+**Auth:** None
+
+**Path params:**
+- `folder` — `thumbnails` or `sog`
+- `filename` — e.g. `object01.jpg`
+
+**Example:**
+
+```
+GET /files/thumbnails/object01.jpg
+GET /files/sog/object01.sog
+```
+
+**Response (200):** Binary file stream with appropriate `Content-Type`
 
 ---
 

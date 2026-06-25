@@ -78,10 +78,10 @@ export class AdminObjectResponseDto {
   creatorUserId!: string;
 
   @ApiProperty()
-  sogPath!: string;
+  sogUrl!: string;
 
   @ApiProperty()
-  thumbnailPath!: string;
+  thumbnailUrl!: string;
 
   @ApiProperty({ enum: ObjectType })
   type!: ObjectType;

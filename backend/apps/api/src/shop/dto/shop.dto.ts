@@ -14,8 +14,11 @@ export class ShopItemResponseDto {
   @ApiProperty()
   creatorUserId!: string;
 
-  @ApiProperty()
-  thumbnailPath!: string;
+  @ApiProperty({
+    description: 'Public HTTP path for the frontend image src',
+    example: '/files/thumbnails/object01.jpg',
+  })
+  thumbnailUrl!: string;
 
   @ApiProperty({ enum: ObjectType })
   type!: ObjectType;
