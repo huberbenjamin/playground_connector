@@ -8,30 +8,14 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
-  const allowedOriginPatterns = [
-    /^http:\/\/localhost:\d+$/,
-    /^http:\/\/127\.0\.0\.1:\d+$/,
-    /^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/,
-  ];
-
+  const corsOrigins = process.env.CORS_ORIGINS;
   app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ) => {
-      if (!origin || allowedOriginPatterns.some((pattern) => pattern.test(origin))) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`CORS blocked origin: ${origin}`));
-    },
+    origin: corsOrigins
+      ? corsOrigins.split(',').map((origin) => origin.trim())
+      : true,
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Authorization',
-      'Content-Type',
-      'ngrok-skip-browser-warning',
-    ],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   app.useGlobalFilters(new AllExceptionsFilter());

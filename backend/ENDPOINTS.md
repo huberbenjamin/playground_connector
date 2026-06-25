@@ -138,6 +138,34 @@ Authorization: Bearer <accessToken>
 
 ---
 
+### POST /objects/generate
+
+**Auth:** User JWT
+
+**Cost:** 2 coins (`PUBLIC`) or 5 coins (`EXCLUSIVE`)
+
+**Content-Type:** `multipart/form-data`
+
+**Fields:**
+- `title` (string)
+- `description` (string)
+- `listingType` (`PUBLIC` = shop listing, `EXCLUSIVE` = private ownership only)
+- `images` (4–6 JPEG files, field name repeated per file)
+
+**Flow:**
+1. Validates 4–6 JPEG images
+2. Checks the user has enough coins for the selected `listingType` (no charge yet)
+3. Forwards images to the Python service `POST /generate-sog`
+4. On success: deducts coins, stores `.sog` + thumbnail, creates ownership record
+
+**Response (200):** Created object
+
+**Errors:**
+- `400` — invalid input, non-JPEG files, or insufficient coins
+- `503` — Python generator unavailable or returned no SOG file
+
+---
+
 ### POST /objects/exclusive
 
 **Auth:** User JWT
@@ -149,7 +177,9 @@ Authorization: Bearer <accessToken>
 **Fields:**
 - `title` (string)
 - `description` (string)
-- `images` (4–6 image files)
+- `images` (4–6 JPEG files)
+
+**Note:** Prefer `POST /objects/generate` with `listingType=EXCLUSIVE`.
 
 **Response (200):** Created object (type `EXCLUSIVE`, not visible in shop)
 
@@ -166,9 +196,9 @@ Authorization: Bearer <accessToken>
 **Fields:**
 - `title` (string)
 - `description` (string)
-- `images` (4–6 image files)
+- `images` (4–6 JPEG files)
 
-**Response (200):** Created object (type `PUBLIC`, visible in shop)
+**Note:** Prefer `POST /objects/generate` with `listingType=PUBLIC`.
 
 ---
 
@@ -329,7 +359,7 @@ Base URL: `http://localhost:8001`
 
 ### POST /generate-sog
 
-**Auth:** None (internal service)
+**Auth:** `X-Worker-Secret-Token` header (must match `WORKER_SECRET_TOKEN` in `.env`)
 
 **Content-Type:** `multipart/form-data`
 
@@ -339,9 +369,15 @@ Base URL: `http://localhost:8001`
 
 ```json
 {
-  "sogFile": null
+  "sogFile": "<base64-encoded .sog file>"
 }
 ```
+
+**Errors:**
+- `401` — missing or invalid worker secret token
+- `500` — `WORKER_SECRET_TOKEN` not configured on the Python service
+
+**Note:** `GET /health` remains unauthenticated for liveness checks.
 
 ---
 

@@ -1,7 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ObjectType } from '@prisma/client';
-import { IsString, Matches, MinLength } from 'class-validator';
+import { IsEnum, IsString, Matches, MinLength } from 'class-validator';
 import { USER_ID_PATTERN } from '@marketplace/shared-types';
+
+export enum UserListingType {
+  PUBLIC = 'PUBLIC',
+  EXCLUSIVE = 'EXCLUSIVE',
+}
 
 export class ObjectResponseDto {
   @ApiProperty()
@@ -42,6 +47,16 @@ export class CreateObjectBodyDto {
   @IsString()
   @MinLength(1)
   description!: string;
+}
+
+export class GenerateObjectDto extends CreateObjectBodyDto {
+  @ApiProperty({
+    enum: UserListingType,
+    description: 'PUBLIC = visible in shop (2 coins), EXCLUSIVE = private ownership only (5 coins)',
+    example: UserListingType.PUBLIC,
+  })
+  @IsEnum(UserListingType)
+  listingType!: UserListingType;
 }
 
 export class GiftObjectDto {

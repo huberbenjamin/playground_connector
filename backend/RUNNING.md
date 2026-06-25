@@ -46,7 +46,9 @@ cp .env.example .env
 | `ADMIN_2_USERNAME` | Second admin username |
 | `ADMIN_2_PASSWORD` | Second admin password |
 | `PORT` | API port (default `3000`) |
+| `CORS_ORIGINS` | Comma-separated allowed frontend origins. Omit to allow all (handy for ngrok dev) |
 | `PYTHON_GENERATOR_URL` | Python service URL (default `http://localhost:8001`) |
+| `WORKER_SECRET_TOKEN` | Shared secret sent as `X-Worker-Secret-Token` on API → Python requests (required) |
 | `STORAGE_ROOT` | Path to local storage (default `../../storage` from `apps/api`) |
 
 ## Database Setup
@@ -213,6 +215,21 @@ curl http://localhost:3000/shop
 | `Invalid user ID` | Use a six-digit ID from `GET /admin/user-ids` |
 | Migration errors | Run `npm run db:migrate` from the repo root |
 | File storage errors | Ensure `storage/sog` and `storage/thumbnails` exist and are writable |
+| `OPTIONS` returns 404 via ngrok | Restart API after enabling CORS; ensure ngrok tunnels to the API port (default `3000`) |
+
+## Exposing the API with ngrok
+
+```bash
+ngrok http 3000
+```
+
+Use the ngrok HTTPS URL as your frontend API base URL. CORS is enabled by default for all origins in development. To restrict origins, set `CORS_ORIGINS` in `.env`:
+
+```
+CORS_ORIGINS="https://your-frontend.ngrok-free.app,http://localhost:5173"
+```
+
+Restart the API after changing `.env`.
 
 ## Coin Economy Summary
 
