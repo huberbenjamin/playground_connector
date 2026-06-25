@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package object_extraction;
+
+// The service definition
+service ObjectExtractor {
+  rpc ExtractObjects (ExtractionRequest) returns (ExtractionResponse);
+}
+
+// The request message containing the images
+message ExtractionRequest {
+  // A list of images sent as raw bytes
+  repeated bytes image_bytes = 1;
+  // Optional: Provide the format (e.g., "png", "jpeg") if your models need it
+  string image_format = 2; 
+}
+
+// Represents a single detected object
+message DetectedObject {
+  string label = 1;
+  float confidence = 2;
+  // Bounding box coordinates normalized between 0.0 and 1.0
+  float x_min = 3;
+  float y_min = 4;
+  float x_max = 5;
+  float y_max = 6;
+}
+
+// The response message containing the extraction results
+message ExtractionResponse {
+  repeated DetectedObject objects = 1;
+}

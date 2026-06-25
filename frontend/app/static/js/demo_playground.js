@@ -129,8 +129,8 @@ function cleanQuaternionForStorage(quaternion) {
 
 function defaultTransform() {
   return {
-    scale: 1,
-    rotationX: 0,
+    scale: 1.2,
+    rotationX: 90,
     rotationY: 0,
     rotationZ: 0,
     quaternion: null
