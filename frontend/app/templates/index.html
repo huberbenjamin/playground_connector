@@ -9,10 +9,39 @@
 </head>
 <body>
   <div class="app">
+    <!-- Login -->
+    <section id="login" class="screen active auth-screen">
+      <div class="login-card">
+        <h1>Sharp VR Album</h1>
+        <div class="auth-tabs" role="tablist" aria-label="Login type">
+          <button id="user-login-tab" class="auth-tab active" type="button" onclick="showLoginMode('user')">User Login</button>
+          <button id="admin-login-tab" class="auth-tab" type="button" onclick="showLoginMode('admin')">Admin Login</button>
+        </div>
+
+        <form id="user-login-form" class="auth-form" onsubmit="handleUserLogin(event)">
+          <label for="user-id-input">User ID</label>
+          <input id="user-id-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+          <button id="user-login-button" type="submit">Enter Gallery</button>
+        </form>
+
+        <form id="admin-login-form" class="auth-form hidden" onsubmit="handleAdminLogin(event)">
+          <label for="admin-username-input">Username</label>
+          <input id="admin-username-input" type="text" autocomplete="username" placeholder="admin1">
+          <label for="admin-password-input">Password</label>
+          <input id="admin-password-input" type="password" autocomplete="current-password" placeholder="Password">
+          <button id="admin-login-button" type="submit">Admin Login</button>
+        </form>
+
+        <p id="auth-error" class="auth-error" role="alert"></p>
+      </div>
+    </section>
 
     <!-- Gallery -->
-    <section id="gallery" class="screen active">
-      <h1>Gallery</h1>
+    <section id="gallery" class="screen">
+      <div class="screen-header">
+        <h1>Gallery</h1>
+        <button class="logout-button" onclick="logout()">Logout</button>
+      </div>
       <div id="gallery-grid" class="grid"></div>
       <button class="fab" onclick="showScreen('camera')">+</button>
     </section>
@@ -37,7 +66,7 @@
         <canvas id="capture-canvas" style="display:none;"></canvas>
       </div>
 
-      <p id="capture-count">0 / 4 images captured</p>
+      <p id="capture-count">0 / 6 images captured</p>
         <div class="camera-controls">
           <!--<button class="round-button count-button" disabled>
             <span id="capture-number">0</span>
@@ -74,22 +103,438 @@
       </a>
       </div>
     </section>
+
+    <!-- Admin -->
+    <section id="admin" class="screen">
+      <div class="screen-header">
+        <h1>Admin</h1>
+        <button class="logout-button" onclick="logout()">Logout</button>
+      </div>
+      <div class="admin-grid">
+        <button class="admin-card" type="button" onclick="showAdminUsers()">
+          <div class="admin-card-title">Users</div>
+        </button>
+        <button class="admin-card" type="button">
+          <div class="admin-card-title">Objects</div>
+        </button>
+        <button class="admin-card" type="button">
+          <div class="admin-card-title">Stats</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- Admin Users -->
+    <section id="admin-users" class="screen">
+      <div class="screen-header">
+        <button class="back" onclick="showScreen('admin')">‹</button>
+        <h1>Users</h1>
+        <button class="logout-button" onclick="logout()">Logout</button>
+      </div>
+      <p id="admin-users-status" class="admin-status">Loading users…</p>
+      <div id="admin-users-list" class="admin-users-list"></div>
+    </section>
   </div>
 
-  <nav class="bottom-nav">
-    <button class="nav-item" onclick="showScreen('ar')">AR</button>
-    <button class="nav-item" onclick="showScreen('camera')">CAM</button>
-    <button class="nav-item active" onclick="showScreen('gallery')">◼</button>
-    <button class="nav-item" onclick="showScreen('store')">⬇</button>
+  <nav id="bottom-nav" class="bottom-nav">
+    <button class="nav-item" data-screen="ar" onclick="showScreen('ar')">AR</button>
+    <button class="nav-item" data-screen="camera" onclick="showScreen('camera')">CAM</button>
+    <button class="nav-item" data-screen="gallery" onclick="showScreen('gallery')">◼</button>
+    <button class="nav-item" data-screen="store" onclick="showScreen('store')">⬇</button>
   </nav>
 
   <script>
+    const API_BASE_URL = "https://518b-2a09-80c0-192-0-59d2-aa5a-5cbf-3f32.ngrok-free.app";
+    const AUTH_TOKEN_KEY = "accessToken";
+    const AUTH_ROLE_KEY = "role";
+    const AUTH_USER_ID_KEY = "userId";
+
     let galleryObjects = [];
     let storeObjects = [];
     let selectedStoreObject = null;
+    let adminUsers = [];
 
+    const MIN_CAPTURED_IMAGES = 4;
+    const MAX_CAPTURED_IMAGES = 6;
     let capturedImages = [];
     let cameraStream = null;
+    let captureInProgress = false;
+
+    function getToken() {
+      return localStorage.getItem(AUTH_TOKEN_KEY);
+    }
+
+    function getRole() {
+      return localStorage.getItem(AUTH_ROLE_KEY);
+    }
+
+    function getAuthHeaders() {
+      const token = getToken();
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    }
+
+    function clearAuthState() {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_ROLE_KEY);
+      localStorage.removeItem(AUTH_USER_ID_KEY);
+    }
+
+    function setAuthLoading(isLoading) {
+      document.getElementById("user-login-button").disabled = isLoading;
+      document.getElementById("admin-login-button").disabled = isLoading;
+      document.getElementById("user-login-button").innerText = isLoading ? "Signing in..." : "Enter Gallery";
+      document.getElementById("admin-login-button").innerText = isLoading ? "Signing in..." : "Admin Login";
+    }
+
+    function setAuthError(message) {
+      document.getElementById("auth-error").innerText = message || "";
+    }
+
+    function showLoginMode(mode) {
+      const isUser = mode === "user";
+      document.getElementById("user-login-form").classList.toggle("hidden", !isUser);
+      document.getElementById("admin-login-form").classList.toggle("hidden", isUser);
+      document.getElementById("user-login-tab").classList.toggle("active", isUser);
+      document.getElementById("admin-login-tab").classList.toggle("active", !isUser);
+      setAuthError("");
+    }
+
+    async function readResponseBody(response) {
+      try {
+        return await response.json();
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function getLoginErrorMessage(error) {
+      if (error instanceof TypeError) {
+        return "Could not reach authentication server. Check API URL or CORS.";
+      }
+
+      if (error.status === 400 || error.status === 401) {
+        return "Invalid login credentials.";
+      }
+
+      return error.message || "Could not log in. Please try again.";
+    }
+
+    async function postAuthRequest(path, payload) {
+      const requestUrl = `${API_BASE_URL}${path}`;
+      console.log("Auth request URL:", requestUrl);
+
+      let response;
+
+      try {
+        response = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (error) {
+        console.error("Auth fetch failed:", error);
+        throw error;
+      }
+
+      console.log("Auth response status:", response.status);
+      const body = await readResponseBody(response);
+
+      if (!response.ok) {
+        console.error("Auth error response body:", body);
+        const error = new Error(body?.message || body?.error || `Request failed with status ${response.status}.`);
+        error.status = response.status;
+        error.body = body;
+        throw error;
+      }
+
+      return body || {};
+    }
+
+    async function loginUser(userId) {
+      // Backend integration: POST /login returns a user JWT accessToken.
+      const data = await postAuthRequest("/login", { userId });
+      if (!data.accessToken) {
+        throw new Error("Login succeeded, but no access token was returned.");
+      }
+
+      localStorage.setItem(AUTH_TOKEN_KEY, data.accessToken);
+      localStorage.setItem(AUTH_ROLE_KEY, "user");
+      localStorage.setItem(AUTH_USER_ID_KEY, userId);
+
+      try {
+        // Backend integration: GET /me uses the user JWT to fetch profile data.
+        const profileResponse = await fetch(`${API_BASE_URL}/me`, {
+          headers: {
+            ...getAuthHeaders(),
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        if (profileResponse.ok) {
+          const profile = await profileResponse.json();
+          if (profile.userId) {
+            localStorage.setItem(AUTH_USER_ID_KEY, profile.userId);
+          }
+        }
+      } catch (error) {
+        console.warn("Could not load user profile:", error);
+      }
+
+      showAuthenticatedView();
+    }
+
+    async function loginAdmin(username, password) {
+      // Backend integration: POST /login-admin returns an admin JWT accessToken.
+      const requestUrl = `${API_BASE_URL}/login-admin`;
+      const requestBody = {
+        username,
+        password
+      };
+
+      console.log("Admin login URL:", requestUrl);
+      console.log("Admin login request body:", requestBody);
+
+      let response;
+
+      try {
+        response = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBody)
+        });
+      } catch (error) {
+        console.error("Admin login fetch failed:", error);
+        throw error;
+      }
+
+      console.log("Admin login response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Admin login raw response text:", responseText);
+
+      let data = {};
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (error) {
+          console.warn("Admin login response was not JSON:", error);
+        }
+      }
+
+      if (!response.ok) {
+        const errorMessage =
+          responseText || data.message || data.error || `Request failed with status ${response.status}.`;
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.body = data;
+        throw error;
+      }
+
+      if (!data.accessToken) {
+        throw new Error(responseText || "Login succeeded, but no access token was returned.");
+      }
+
+      localStorage.setItem(AUTH_TOKEN_KEY, data.accessToken);
+      localStorage.setItem(AUTH_ROLE_KEY, "admin");
+      localStorage.removeItem(AUTH_USER_ID_KEY);
+      showAuthenticatedView();
+    }
+
+    async function logout() {
+      stopCamera();
+
+      try {
+        // Backend integration: POST /logout has no auth requirement; client discards token.
+        await fetch(`${API_BASE_URL}/logout`, {
+          method: "POST",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+      } catch (error) {
+        console.warn("Logout request failed:", error);
+      }
+
+      clearAuthState();
+      resetCameraCaptureState();
+      showPublicLogin();
+    }
+
+    async function handleUserLogin(event) {
+      event.preventDefault();
+      const userId = document.getElementById("user-id-input").value.trim();
+
+      if (!/^\d{6}$/.test(userId)) {
+        setAuthError("User ID must be exactly six digits.");
+        return;
+      }
+
+      setAuthError("");
+      setAuthLoading(true);
+
+      try {
+        await loginUser(userId);
+      } catch (error) {
+        setAuthError(getLoginErrorMessage(error));
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+
+    async function handleAdminLogin(event) {
+      event.preventDefault();
+      const username = document.getElementById("admin-username-input").value.trim();
+      const password = document.getElementById("admin-password-input").value;
+
+      if (!username || !password) {
+        setAuthError("Enter an admin username and password.");
+        return;
+      }
+
+      setAuthError("");
+      setAuthLoading(true);
+
+      try {
+        await loginAdmin(username, password);
+      } catch (error) {
+        if (error instanceof TypeError) {
+          setAuthError("Could not reach authentication server. Check API URL or CORS.");
+        } else {
+          setAuthError(error.message || "Could not log in. Please try again.");
+        }
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+
+    function showPublicLogin() {
+      clearAuthState();
+      showScreen("login");
+    }
+
+    function showAuthenticatedView() {
+      const role = getRole();
+
+      if (!getToken()) {
+        showPublicLogin();
+        return;
+      }
+
+      if (role === "admin") {
+        document.getElementById("bottom-nav").style.display = "none";
+        showScreen("admin");
+        return;
+      }
+
+      if (role === "user") {
+        document.getElementById("bottom-nav").style.display = "flex";
+        showScreen("gallery");
+        return;
+      }
+
+      showPublicLogin();
+    }
+
+    function formatDate(value) {
+      if (!value) return "";
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+
+      return date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      });
+    }
+
+    function getUserStateBadgeClass(state) {
+      if (state === "ACTIVE") return "state-active";
+      if (state === "REMOVED") return "state-removed";
+      return "state-pregenerated";
+    }
+
+    function renderAdminUsers() {
+      const list = document.getElementById("admin-users-list");
+      const status = document.getElementById("admin-users-status");
+
+      list.innerHTML = "";
+
+      if (!adminUsers.length) {
+        status.innerText = "No user IDs found.";
+        status.style.display = "block";
+        return;
+      }
+
+      status.innerText = "";
+      status.style.display = "none";
+
+      adminUsers.forEach((user) => {
+        const row = document.createElement("div");
+        row.className = "admin-user-row";
+
+        const activatedAt = user.activatedAt
+          ? `<div class="admin-user-meta">Activated ${formatDate(user.activatedAt)}</div>`
+          : "";
+
+        row.innerHTML = `
+          <div class="admin-user-main">
+            <div class="admin-user-id">${user.userId}</div>
+            <span class="state-badge ${getUserStateBadgeClass(user.state)}">${user.state}</span>
+          </div>
+          ${activatedAt}
+          <div class="admin-user-meta">Created ${formatDate(user.createdAt)}</div>
+        `;
+
+        list.appendChild(row);
+      });
+    }
+
+    async function loadAdminUsers() {
+      const requestUrl = `${API_BASE_URL}/admin/user-ids`;
+      const status = document.getElementById("admin-users-status");
+      const list = document.getElementById("admin-users-list");
+
+      status.innerText = "Loading users…";
+      status.style.display = "block";
+      list.innerHTML = "";
+
+      console.log("Admin users request URL:", requestUrl);
+
+      try {
+        const response = await fetch(requestUrl, {
+          headers: {
+            ...getAuthHeaders(),
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        console.log("Admin users response status:", response.status);
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}.`);
+        }
+
+        adminUsers = await response.json();
+        console.log("Admin users parsed response:", adminUsers);
+        renderAdminUsers();
+      } catch (error) {
+        console.error("Could not load admin users:", error);
+        status.innerText = "Could not load user IDs.";
+        status.style.display = "block";
+      }
+    }
+
+    function showAdminUsers() {
+      showScreen("admin-users");
+      loadAdminUsers();
+    }
 
     async function startCamera() {
       try {
@@ -110,8 +555,13 @@
     }
 
     function captureImage() {
-      if (capturedImages.length >= 4) {
-        alert("You already captured 4 images.");
+      if (capturedImages.length >= MAX_CAPTURED_IMAGES) {
+        alert(`You already captured ${MAX_CAPTURED_IMAGES} images.`);
+        updateCaptureControls();
+        return;
+      }
+
+      if (captureInProgress) {
         return;
       }
 
@@ -129,8 +579,21 @@
       const ctx = canvas.getContext("2d");
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      captureInProgress = true;
+      updateCaptureControls();
+
       canvas.toBlob((blob) => {
-        if (!blob) return;
+        captureInProgress = false;
+
+        if (!blob) {
+          updateCaptureControls();
+          return;
+        }
+
+        if (capturedImages.length >= MAX_CAPTURED_IMAGES) {
+          updateCaptureControls();
+          return;
+        }
 
         capturedImages.push(blob);
         updateCaptureUI(blob);
@@ -139,18 +602,34 @@
 
     function updateCaptureUI(blob) {
       document.getElementById("capture-count").innerText =
-        `${capturedImages.length} / 4 images captured`;
+        `${capturedImages.length} / ${MAX_CAPTURED_IMAGES} images captured`;
 
       const previewRow = document.getElementById("preview-row");
-      const img = document.createElement("img");
-      img.className = "preview-img";
-      img.src = URL.createObjectURL(blob);
-      previewRow.appendChild(img);
+      if (previewRow) {
+        const img = document.createElement("img");
+        img.className = "preview-img";
+        img.src = URL.createObjectURL(blob);
+        previewRow.appendChild(img);
+      }
+
+      updateCaptureControls();
+    }
+
+    function updateCaptureControls() {
+      const captureButton = document.querySelector(".capture-button");
+      if (captureButton) {
+        captureButton.disabled =
+          captureInProgress || capturedImages.length >= MAX_CAPTURED_IMAGES;
+      }
     }
 
     function continueToProcessing() {
-      if (capturedImages.length === 0) { // 2-3 images ok as well?
+      if (capturedImages.length == 0 ) {
         alert("Capture at least one image first.");
+        return;
+      }
+      else if (capturedImages.length < MIN_CAPTURED_IMAGES || capturedImages.length > MAX_CAPTURED_IMAGES ) {
+        alert(`Capture ${MIN_CAPTURED_IMAGES}-${MAX_CAPTURED_IMAGES} images`);
         return;
       }
 
@@ -175,12 +654,16 @@
     
 
     async function loadObjects() {
-      const galleryRes = await fetch("/api/gallery-objects");
-      galleryObjects = await galleryRes.json();
-      const storeRes = await fetch("/api/store-objects");
-      storeObjects = await storeRes.json();
-      renderGallery();
-      renderStore();
+      try {
+        const galleryRes = await fetch("/api/gallery-objects");
+        galleryObjects = await galleryRes.json();
+        const storeRes = await fetch("/api/store-objects");
+        storeObjects = await storeRes.json();
+        renderGallery();
+        renderStore();
+      } catch (error) {
+        console.warn("Could not load gallery objects:", error);
+      }
     }
 
     function renderGallery() {
@@ -245,12 +728,36 @@
         showScreen("gallery");
       }, 1200);
     }
+
     function showScreen(id) {
+      const publicScreens = ["login"];
+      const userScreens = ["gallery", "store", "camera", "processing", "ar"];
+      const adminScreens = ["admin", "admin-users"];
+      const role = getRole();
+      const token = getToken();
+
+      if (!token && !publicScreens.includes(id)) {
+        id = "login";
+      } else if (role === "admin" && !adminScreens.includes(id)) {
+        id = "admin";
+      } else if (role === "user" && !userScreens.includes(id) && !publicScreens.includes(id)) {
+        id = "gallery";
+      }
+
       document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
       document.getElementById(id).classList.add("active");
+      document.getElementById("bottom-nav").style.display =
+        token && role === "user" && userScreens.includes(id) ? "flex" : "none";
       document.querySelectorAll(".nav-item").forEach(btn => btn.classList.remove("active"));
+
+      const activeNavButton = document.querySelector(`.nav-item[data-screen="${id}"]`);
+      if (activeNavButton) {
+        activeNavButton.classList.add("active");
+      }
+
       if (id === "camera") {
         startCamera();
+        updateCaptureControls();
       } else {
         stopCamera();
       }
@@ -258,20 +765,29 @@
 
     function resetCameraCaptureState() {
       capturedImages = [];
+      captureInProgress = false;
 
       document.getElementById("capture-count").innerText =
-        "0 / 4 images captured";
+        `0 / ${MAX_CAPTURED_IMAGES} images captured`;
 
       const previewRow = document.getElementById("preview-row");
       if (previewRow) {
         previewRow.innerHTML = "";
       }
+
+      updateCaptureControls();
     }
 
+    function initializeApp() {
+      document.getElementById("user-id-input").addEventListener("input", (event) => {
+        event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
+      });
 
-    loadObjects();
+      loadObjects();
+      showAuthenticatedView();
+    }
+
+    initializeApp();
   </script>
-<footer class="credits">
-  Made with
-  <a href="https:/
-  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
