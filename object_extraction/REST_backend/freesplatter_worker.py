@@ -5,9 +5,8 @@ from typing import List
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Calculate path relative to this script: gateway.py -> .. -> .. -> .env
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ENV_PATH = BASE_DIR / ".env"
+ENV_PATH = BASE_DIR / "backend/.env"
 
 # Load the specific .env file
 load_dotenv(dotenv_path=ENV_PATH)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Load variables from .env file
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ENV_PATH = BASE_DIR / ".env"
+ENV_PATH = BASE_DIR / "backend/.env"
 # Load the specific .env file
 load_dotenv(dotenv_path=ENV_PATH)
 
