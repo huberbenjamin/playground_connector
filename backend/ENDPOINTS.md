@@ -359,7 +359,7 @@ Base URL: `http://localhost:8001`
 
 ### POST /generate-sog
 
-**Auth:** None (internal service)
+**Auth:** `X-Worker-Secret-Token` header (must match `WORKER_SECRET_TOKEN` in `.env`)
 
 **Content-Type:** `multipart/form-data`
 
@@ -369,9 +369,15 @@ Base URL: `http://localhost:8001`
 
 ```json
 {
-  "sogFile": null
+  "sogFile": "<base64-encoded .sog file>"
 }
 ```
+
+**Errors:**
+- `401` — missing or invalid worker secret token
+- `500` — `WORKER_SECRET_TOKEN` not configured on the Python service
+
+**Note:** `GET /health` remains unauthenticated for liveness checks.
 
 ---
 

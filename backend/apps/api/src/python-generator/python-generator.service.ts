@@ -1,17 +1,34 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import FormData from 'form-data';
 import { GenerateSogResponse } from '@marketplace/shared-types';
 
+export const WORKER_SECRET_HEADER = 'X-Worker-Secret-Token';
+
 @Injectable()
-export class PythonGeneratorService {
+export class PythonGeneratorService implements OnModuleInit {
   private readonly baseUrl: string;
+  private workerSecretToken!: string;
 
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>(
       'PYTHON_GENERATOR_URL',
       'http://localhost:8001',
     );
+  }
+
+  onModuleInit(): void {
+    const token = this.configService.get<string>('WORKER_SECRET_TOKEN');
+    if (!token) {
+      throw new Error(
+        'WORKER_SECRET_TOKEN is required for Python generator communication',
+      );
+    }
+    this.workerSecretToken = token;
   }
 
   async generateSog(images: Express.Multer.File[]): Promise<Buffer> {
@@ -27,7 +44,10 @@ export class PythonGeneratorService {
     const response = await fetch(`${this.baseUrl}/generate-sog`, {
       method: 'POST',
       body: formData as unknown as BodyInit,
-      headers: formData.getHeaders(),
+      headers: {
+        ...formData.getHeaders(),
+        [WORKER_SECRET_HEADER]: this.workerSecretToken,
+      },
     });
 
     if (!response.ok) {
