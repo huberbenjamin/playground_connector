@@ -627,7 +627,69 @@
       }
     }
 
-    function continueToProcessing() {
+    async function uploadCapturedObject() {
+      const uploadUrl = `${API_BASE_URL}/objects/public`;
+      const formData = new FormData();
+
+      formData.append("title", "New Object");
+      formData.append("description", "Created from camera capture");
+
+      capturedImages.forEach((blob, index) => {
+        formData.append("images", blob, `capture-${index + 1}.jpg`);
+      });
+
+      console.log("Object upload URL:", uploadUrl);
+      console.log("Object upload image count:", capturedImages.length);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "ngrok-skip-browser-warning": "true"
+        },
+        body: formData
+      });
+
+      console.log("Object upload response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Object upload response body:", responseText);
+
+      let data = {};
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (error) {
+          console.warn("Object upload response was not JSON:", error);
+        }
+      }
+
+      if (!response.ok) {
+        const message = data.message || data.error || responseText || `Upload failed with status ${response.status}.`;
+        throw new Error(message);
+      }
+
+      return data;
+    }
+
+    function normalizeGalleryObject(object) {
+      const id = object.id || object.objectId || `local-${Date.now()}`;
+
+      return {
+        ...object,
+        id,
+        name: object.name || object.title || "New Object",
+        createdAt: object.createdAt ? formatDate(object.createdAt) : formatDate(new Date().toISOString())
+      };
+    }
+
+    async function continueToProcessing() {
+      if (!getToken()) {
+        alert("Log in before uploading an object.");
+        showPublicLogin();
+        return;
+      }
+
       if (capturedImages.length == 0 ) {
         alert("Capture at least one image first.");
         return;
@@ -638,15 +700,19 @@
       }
 
       stopCamera();
-
-      // later upload to backend
       showScreen("processing");
 
-      setTimeout(() => {
+      try {
+        const createdObject = await uploadCapturedObject();
+        galleryObjects.unshift(normalizeGalleryObject(createdObject));
+        renderGallery();
         resetCameraCaptureState();
-        alert("Success! Object created.");
         showScreen("gallery");
-      }, 1200);
+      } catch (error) {
+        console.error("Object upload failed:", error);
+        alert(error.message || "Upload failed. Please try again.");
+        showScreen("camera");
+      }
     }
 
     function stopCamera() {
@@ -674,11 +740,14 @@
       const grid = document.getElementById("gallery-grid");
       grid.innerHTML = "";
       galleryObjects.forEach(obj => {
+        const id = obj.id || obj.objectId;
+        const name = obj.name || obj.title || "Object";
+        const createdAt = obj.createdAt ? formatDate(obj.createdAt) : "";
         grid.innerHTML += `
-          <div class="object-card" onclick="openViewer('${obj.id}')">
+          <div class="object-card" onclick="openViewer('${id}')">
             <div class="object-thumb">◼</div>
-            <div class="object-name">${obj.name}</div>
-            <div class="object-date">${obj.createdAt}</div>
+            <div class="object-name">${name}</div>
+            <div class="object-date">${createdAt}</div>
           </div>
         `;
       });
