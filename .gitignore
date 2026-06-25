@@ -13,3 +13,5 @@ frontend/app/static/assets
 # Large Model Repositories / Submodules
 **/object_extraction/FreeSplatter/
 **/object_extraction/LGM/
+
+.env
