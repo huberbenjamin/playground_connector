@@ -254,32 +254,93 @@
 
     async function loginUser(userId) {
       // Backend integration: POST /login returns a user JWT accessToken.
-      const data = await postAuthRequest("/login", { userId });
-      if (!data.accessToken) {
+      const loginUrl = `${API_BASE_URL}/login`;
+      const loginBody = { userId };
+
+      console.log("User login URL:", loginUrl);
+
+      let loginResponse;
+
+      try {
+        loginResponse = await fetch(loginUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(loginBody)
+        });
+      } catch (error) {
+        console.error("User login fetch failed:", error);
+        throw error;
+      }
+
+      console.log("User login response status:", loginResponse.status);
+
+      const loginResponseText = await loginResponse.text();
+      console.log("User login raw response text:", loginResponseText);
+
+      let loginData = {};
+      if (loginResponseText) {
+        try {
+          loginData = JSON.parse(loginResponseText);
+        } catch (error) {
+          console.warn("User login response was not JSON:", error);
+        }
+      }
+
+      if (!loginResponse.ok) {
+        const error = new Error("Invalid user ID or login failed.");
+        error.status = loginResponse.status;
+        error.body = loginData;
+        throw error;
+      }
+
+      const accessToken = loginData.accessToken;
+      console.log("User login accessToken exists:", Boolean(accessToken));
+
+      if (!accessToken) {
         throw new Error("Login succeeded, but no access token was returned.");
       }
 
-      localStorage.setItem(AUTH_TOKEN_KEY, data.accessToken);
+      localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
       localStorage.setItem(AUTH_ROLE_KEY, "user");
       localStorage.setItem(AUTH_USER_ID_KEY, userId);
 
       try {
         // Backend integration: GET /me uses the user JWT to fetch profile data.
-        const profileResponse = await fetch(`${API_BASE_URL}/me`, {
+        const meUrl = `${API_BASE_URL}/me`;
+        console.log("/me request URL:", meUrl);
+
+        const profileResponse = await fetch(meUrl, {
           headers: {
-            ...getAuthHeaders(),
-            "ngrok-skip-browser-warning": "true"
+            Authorization: `Bearer ${accessToken}`
           }
         });
 
+        console.log("/me response status:", profileResponse.status);
+
+        const profileResponseText = await profileResponse.text();
+        console.log("/me raw response text:", profileResponseText);
+
         if (profileResponse.ok) {
-          const profile = await profileResponse.json();
+          const profile = profileResponseText ? JSON.parse(profileResponseText) : {};
           if (profile.userId) {
             localStorage.setItem(AUTH_USER_ID_KEY, profile.userId);
           }
+          if (profile.coins !== undefined) {
+            localStorage.setItem("coins", String(profile.coins));
+          }
+          if (profile.state) {
+            localStorage.setItem("state", profile.state);
+          }
+          if (profile.activatedAt !== undefined && profile.activatedAt !== null) {
+            localStorage.setItem("activatedAt", profile.activatedAt);
+          }
+        } else {
+          console.warn("/me request failed after successful login:", profileResponse.status, profileResponseText);
         }
       } catch (error) {
-        console.warn("Could not load user profile:", error);
+        console.warn("/me request failed after successful login:", error);
       }
 
       showAuthenticatedView();
@@ -379,7 +440,11 @@
       try {
         await loginUser(userId);
       } catch (error) {
-        setAuthError(getLoginErrorMessage(error));
+        if (error instanceof TypeError) {
+          setAuthError("Could not reach authentication server. Check API URL or CORS.");
+        } else {
+          setAuthError(error.message || "Invalid user ID or login failed.");
+        }
       } finally {
         setAuthLoading(false);
       }
@@ -627,7 +692,69 @@
       }
     }
 
-    function continueToProcessing() {
+    async function uploadCapturedObject() {
+      const uploadUrl = `${API_BASE_URL}/objects/public`;
+      const formData = new FormData();
+
+      formData.append("title", "New Object");
+      formData.append("description", "Created from camera capture");
+
+      capturedImages.forEach((blob, index) => {
+        formData.append("images", blob, `capture-${index + 1}.jpg`);
+      });
+
+      console.log("Object upload URL:", uploadUrl);
+      console.log("Object upload image count:", capturedImages.length);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "ngrok-skip-browser-warning": "true"
+        },
+        body: formData
+      });
+
+      console.log("Object upload response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Object upload response body:", responseText);
+
+      let data = {};
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (error) {
+          console.warn("Object upload response was not JSON:", error);
+        }
+      }
+
+      if (!response.ok) {
+        const message = data.message || data.error || responseText || `Upload failed with status ${response.status}.`;
+        throw new Error(message);
+      }
+
+      return data;
+    }
+
+    function normalizeGalleryObject(object) {
+      const id = object.id || object.objectId || `local-${Date.now()}`;
+
+      return {
+        ...object,
+        id,
+        name: object.name || object.title || "New Object",
+        createdAt: object.createdAt ? formatDate(object.createdAt) : formatDate(new Date().toISOString())
+      };
+    }
+
+    async function continueToProcessing() {
+      if (!getToken()) {
+        alert("Log in before uploading an object.");
+        showPublicLogin();
+        return;
+      }
+
       if (capturedImages.length == 0 ) {
         alert("Capture at least one image first.");
         return;
@@ -638,15 +765,19 @@
       }
 
       stopCamera();
-
-      // later upload to backend
       showScreen("processing");
 
-      setTimeout(() => {
+      try {
+        const createdObject = await uploadCapturedObject();
+        galleryObjects.unshift(normalizeGalleryObject(createdObject));
+        renderGallery();
         resetCameraCaptureState();
-        alert("Success! Object created.");
         showScreen("gallery");
-      }, 1200);
+      } catch (error) {
+        console.error("Object upload failed:", error);
+        alert(error.message || "Upload failed. Please try again.");
+        showScreen("camera");
+      }
     }
 
     function stopCamera() {
@@ -674,11 +805,14 @@
       const grid = document.getElementById("gallery-grid");
       grid.innerHTML = "";
       galleryObjects.forEach(obj => {
+        const id = obj.id || obj.objectId;
+        const name = obj.name || obj.title || "Object";
+        const createdAt = obj.createdAt ? formatDate(obj.createdAt) : "";
         grid.innerHTML += `
-          <div class="object-card" onclick="openViewer('${obj.id}')">
+          <div class="object-card" onclick="openViewer('${id}')">
             <div class="object-thumb">◼</div>
-            <div class="object-name">${obj.name}</div>
-            <div class="object-date">${obj.createdAt}</div>
+            <div class="object-name">${name}</div>
+            <div class="object-date">${createdAt}</div>
           </div>
         `;
       });
