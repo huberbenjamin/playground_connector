@@ -105,6 +105,14 @@ export class UsersRepository {
     });
   }
 
+  async hasSufficientCoins(id: string, amount: number): Promise<boolean> {
+    const user = await this.findById(id);
+    if (!user) {
+      return false;
+    }
+    return user.coins >= amount;
+  }
+
   async addCoins(id: string, amount: number): Promise<User> {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUniqueOrThrow({ where: { id } });

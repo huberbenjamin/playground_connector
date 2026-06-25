@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import FormData from 'form-data';
 import { GenerateSogResponse } from '@marketplace/shared-types';
@@ -32,15 +32,19 @@ export class PythonGeneratorService {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Python generator failed: ${response.status} ${text}`);
+      throw new ServiceUnavailableException(
+        `Python generator failed: ${response.status} ${text}`,
+      );
     }
 
     const data = (await response.json()) as GenerateSogResponse;
 
-    if (data.sogFile) {
-      return Buffer.from(data.sogFile, 'base64');
+    if (!data.sogFile) {
+      throw new ServiceUnavailableException(
+        'Python generator did not return a SOG file',
+      );
     }
 
-    return Buffer.from('# placeholder sog file\n', 'utf-8');
+    return Buffer.from(data.sogFile, 'base64');
   }
 }

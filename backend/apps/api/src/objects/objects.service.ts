@@ -3,19 +3,19 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ObjectType } from '@prisma/client';
 import {
   ADMIN_CREATOR_ID,
   EXCLUSIVE_OBJECT_COST,
   PUBLIC_OBJECT_COST,
-  SHOP_PURCHASE_COST,
 } from '@marketplace/shared-types';
 import { ObjectsRepository } from './objects.repository';
 import { StorageService } from '../storage/storage.service';
 import { PythonGeneratorService } from '../python-generator/python-generator.service';
 import { UsersRepository } from '../users/users.repository';
-import { ObjectResponseDto } from './dto/objects.dto';
+import { ObjectResponseDto, UserListingType } from './dto/objects.dto';
 
 @Injectable()
 export class ObjectsService {
@@ -84,29 +84,13 @@ export class ObjectsService {
     description: string,
     images: Express.Multer.File[],
   ): Promise<ObjectResponseDto> {
-    this.validateImages(images);
-    await this.chargeUser(userId, EXCLUSIVE_OBJECT_COST);
-
-    const sogBuffer = await this.pythonGeneratorService.generateSog(images);
-    const sogFile = await this.storageService.saveSog(sogBuffer);
-    const thumbnail = await this.storageService.saveThumbnail(
-      images[0].buffer,
-      images[0].originalname,
-    );
-
-    const object = await this.objectsRepository.createObject(
-      {
-        title,
-        description,
-        creator: { connect: { id: userId } },
-        sogPath: sogFile.relativePath,
-        thumbnailPath: thumbnail.relativePath,
-        type: ObjectType.EXCLUSIVE,
-      },
+    return this.generateObjectFromImages(
       userId,
+      title,
+      description,
+      images,
+      UserListingType.EXCLUSIVE,
     );
-
-    return this.toResponse(object);
   }
 
   async createPublicObject(
@@ -115,10 +99,45 @@ export class ObjectsService {
     description: string,
     images: Express.Multer.File[],
   ): Promise<ObjectResponseDto> {
-    this.validateImages(images);
-    await this.chargeUser(userId, PUBLIC_OBJECT_COST);
+    return this.generateObjectFromImages(
+      userId,
+      title,
+      description,
+      images,
+      UserListingType.PUBLIC,
+    );
+  }
 
-    const sogBuffer = await this.pythonGeneratorService.generateSog(images);
+  async generateObjectFromImages(
+    userId: string,
+    title: string,
+    description: string,
+    images: Express.Multer.File[],
+    listingType: UserListingType,
+  ): Promise<ObjectResponseDto> {
+    this.validateJpegImages(images);
+
+    const objectType = this.toObjectType(listingType);
+    const cost = this.getCreationCost(listingType);
+
+    const hasCoins = await this.usersRepository.hasSufficientCoins(userId, cost);
+    if (!hasCoins) {
+      throw new BadRequestException(
+        `Insufficient coins. This operation requires ${cost} coins.`,
+      );
+    }
+
+    let sogBuffer: Buffer;
+    try {
+      sogBuffer = await this.pythonGeneratorService.generateSog(images);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'SOG generation failed';
+      throw new ServiceUnavailableException(message);
+    }
+
+    await this.chargeUser(userId, cost);
+
     const sogFile = await this.storageService.saveSog(sogBuffer);
     const thumbnail = await this.storageService.saveThumbnail(
       images[0].buffer,
@@ -132,7 +151,7 @@ export class ObjectsService {
         creator: { connect: { id: userId } },
         sogPath: sogFile.relativePath,
         thumbnailPath: thumbnail.relativePath,
-        type: ObjectType.PUBLIC,
+        type: objectType,
       },
       userId,
     );
@@ -202,10 +221,36 @@ export class ObjectsService {
     return this.toResponse(object!);
   }
 
-  private validateImages(images: Express.Multer.File[]): void {
+  private validateJpegImages(images: Express.Multer.File[]): void {
     if (!images || images.length < 4 || images.length > 6) {
-      throw new BadRequestException('Between 4 and 6 images are required');
+      throw new BadRequestException('Between 4 and 6 JPEG images are required');
     }
+
+    for (const image of images) {
+      const mimeType = image.mimetype.toLowerCase();
+      const extension = image.originalname.toLowerCase();
+      const isJpeg =
+        mimeType === 'image/jpeg' ||
+        mimeType === 'image/jpg' ||
+        extension.endsWith('.jpg') ||
+        extension.endsWith('.jpeg');
+
+      if (!isJpeg) {
+        throw new BadRequestException('Only JPEG images (.jpg, .jpeg) are allowed');
+      }
+    }
+  }
+
+  private getCreationCost(listingType: UserListingType): number {
+    return listingType === UserListingType.EXCLUSIVE
+      ? EXCLUSIVE_OBJECT_COST
+      : PUBLIC_OBJECT_COST;
+  }
+
+  private toObjectType(listingType: UserListingType): ObjectType {
+    return listingType === UserListingType.EXCLUSIVE
+      ? ObjectType.EXCLUSIVE
+      : ObjectType.PUBLIC;
   }
 
   private async chargeUser(userId: string, amount: number): Promise<void> {
