@@ -42,6 +42,7 @@
         <h1>Gallery</h1>
         <button class="logout-button" onclick="logout()">Logout</button>
       </div>
+      <div id="user-info-chip" class="user-info-chip" style="display:none;"></div>
       <div id="gallery-grid" class="grid"></div>
       <button class="fab" onclick="showScreen('camera')">+</button>
     </section>
@@ -50,6 +51,8 @@
     <section id="store" class="screen">
       <button class="back" onclick="showScreen('gallery')">‹</button>
       <h1>Store</h1>
+      <div id="store-user-info-chip" class="user-info-chip" style="display:none;"></div>
+      <input id="store-search" class="store-search" type="search" placeholder="Search store" oninput="renderStore()">
       <div id="store-grid" class="grid"></div>
       <div id="store-panel" class="panel" style="display:none;">
         <div id="selected-store-name">Object selected</div>
@@ -143,10 +146,13 @@
   </nav>
 
   <script>
-    const API_BASE_URL = " https://adb0-2a09-80c0-192-0-59d2-aa5a-5cbf-3f32.ngrok-free.app";
+    const API_BASE_URL = "http://localhost:3000";
     const AUTH_TOKEN_KEY = "accessToken";
     const AUTH_ROLE_KEY = "role";
     const AUTH_USER_ID_KEY = "userId";
+    const AUTH_COINS_KEY = "coins";
+    const AUTH_STATE_KEY = "state";
+    const AUTH_ACTIVATED_AT_KEY = "activatedAt";
 
     let galleryObjects = [];
     let storeObjects = [];
@@ -167,6 +173,10 @@
       return localStorage.getItem(AUTH_ROLE_KEY);
     }
 
+    function getCurrentUserId() {
+      return localStorage.getItem(AUTH_USER_ID_KEY);
+    }
+
     function getAuthHeaders() {
       const token = getToken();
       return token ? { Authorization: `Bearer ${token}` } : {};
@@ -176,6 +186,78 @@
       localStorage.removeItem(AUTH_TOKEN_KEY);
       localStorage.removeItem(AUTH_ROLE_KEY);
       localStorage.removeItem(AUTH_USER_ID_KEY);
+      localStorage.removeItem(AUTH_COINS_KEY);
+      localStorage.removeItem(AUTH_STATE_KEY);
+      localStorage.removeItem(AUTH_ACTIVATED_AT_KEY);
+      renderUserInfoChip();
+    }
+
+    function renderUserInfoChip() {
+      const chips = document.querySelectorAll(".user-info-chip");
+      if (!chips.length) return;
+
+      const userId = getCurrentUserId();
+      const coins = localStorage.getItem(AUTH_COINS_KEY);
+      const shouldShow = getRole() === "user" && Boolean(userId);
+      const chipContent = `
+        <span class="user-info-label">My ID</span>
+        <span class="user-info-value">${userId}</span>
+        ${coins !== null ? `<span class="user-info-coins">· ${coins} coins</span>` : ""}
+      `;
+
+      chips.forEach((chip) => {
+        if (!shouldShow) {
+          chip.style.display = "none";
+          chip.innerHTML = "";
+          return;
+        }
+
+        chip.innerHTML = chipContent;
+        chip.style.display = "inline-flex";
+      });
+    }
+
+    async function refreshCoins() {
+      const token = getToken();
+      const requestUrl = `${API_BASE_URL}/coins`;
+
+      console.log("/coins request URL:", requestUrl);
+      console.log("/coins token exists:", Boolean(token));
+
+      if (!token || getRole() !== "user") {
+        renderUserInfoChip();
+        return null;
+      }
+
+      try {
+        const response = await fetch(requestUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        console.log("/coins response status:", response.status);
+        const responseText = await response.text();
+        console.log("/coins response body:", responseText);
+
+        if (!response.ok) {
+          throw new Error(`Coins request failed with status ${response.status}.`);
+        }
+
+        const data = responseText ? JSON.parse(responseText) : {};
+        if (data.coins !== undefined) {
+          localStorage.setItem(AUTH_COINS_KEY, String(data.coins));
+          console.log("/coins updated coin value:", data.coins);
+        }
+
+        renderUserInfoChip();
+        return data;
+      } catch (error) {
+        console.warn("Could not refresh coins; keeping cached value:", error);
+        renderUserInfoChip();
+        return null;
+      }
     }
 
     function setAuthLoading(isLoading) {
@@ -324,25 +406,33 @@
 
         if (profileResponse.ok) {
           const profile = profileResponseText ? JSON.parse(profileResponseText) : {};
+          console.log("/me response userId:", profile.userId);
+          console.log("/me response coins:", profile.coins);
           if (profile.userId) {
             localStorage.setItem(AUTH_USER_ID_KEY, profile.userId);
           }
           if (profile.coins !== undefined) {
-            localStorage.setItem("coins", String(profile.coins));
+            localStorage.setItem(AUTH_COINS_KEY, String(profile.coins));
           }
           if (profile.state) {
-            localStorage.setItem("state", profile.state);
+            localStorage.setItem(AUTH_STATE_KEY, profile.state);
           }
           if (profile.activatedAt !== undefined && profile.activatedAt !== null) {
-            localStorage.setItem("activatedAt", profile.activatedAt);
+            localStorage.setItem(AUTH_ACTIVATED_AT_KEY, profile.activatedAt);
           }
         } else {
           console.warn("/me request failed after successful login:", profileResponse.status, profileResponseText);
+          console.log("Using fallback userId from login:", userId);
+          localStorage.setItem(AUTH_USER_ID_KEY, userId);
         }
       } catch (error) {
         console.warn("/me request failed after successful login:", error);
+        console.log("Using fallback userId from login:", userId);
+        localStorage.setItem(AUTH_USER_ID_KEY, userId);
       }
 
+      renderUserInfoChip();
+      await refreshCoins();
       showAuthenticatedView();
     }
 
@@ -402,6 +492,10 @@
       localStorage.setItem(AUTH_TOKEN_KEY, data.accessToken);
       localStorage.setItem(AUTH_ROLE_KEY, "admin");
       localStorage.removeItem(AUTH_USER_ID_KEY);
+      localStorage.removeItem(AUTH_COINS_KEY);
+      localStorage.removeItem(AUTH_STATE_KEY);
+      localStorage.removeItem(AUTH_ACTIVATED_AT_KEY);
+      renderUserInfoChip();
       showAuthenticatedView();
     }
 
@@ -497,6 +591,7 @@
 
       if (role === "user") {
         document.getElementById("bottom-nav").style.display = "flex";
+        renderUserInfoChip();
         showScreen("gallery");
         return;
       }
@@ -768,10 +863,10 @@
       showScreen("processing");
 
       try {
-        const createdObject = await uploadCapturedObject();
-        galleryObjects.unshift(normalizeGalleryObject(createdObject));
-        renderGallery();
+        await uploadCapturedObject();
         resetCameraCaptureState();
+        await loadGalleryObjects();
+        await refreshCoins();
         showScreen("gallery");
       } catch (error) {
         console.error("Object upload failed:", error);
@@ -789,15 +884,71 @@
     
 
     async function loadObjects() {
-      try {
-        const galleryRes = await fetch("/api/gallery-objects");
-        galleryObjects = await galleryRes.json();
-        const storeRes = await fetch("/api/store-objects");
-        storeObjects = await storeRes.json();
+      await Promise.all([
+        loadGalleryObjects(),
+        loadStoreObjects()
+      ]);
+    }
+
+    async function loadGalleryObjects() {
+      if (!getToken() || getRole() !== "user") {
+        galleryObjects = [];
         renderGallery();
-        renderStore();
+        return;
+      }
+
+      const requestUrl = `${API_BASE_URL}/objects`;
+      console.log("Gallery objects request URL:", requestUrl);
+
+      try {
+        const response = await fetch(requestUrl, {
+          headers: {
+            ...getAuthHeaders(),
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        console.log("Gallery objects response status:", response.status);
+        const responseText = await response.text();
+        console.log("Refreshed gallery response:", responseText);
+
+        if (!response.ok) {
+          throw new Error(responseText || `Could not load gallery objects. Status ${response.status}.`);
+        }
+
+        galleryObjects = responseText ? JSON.parse(responseText) : [];
+        console.log("Loaded gallery objects:", galleryObjects);
+        console.log("Current owned objectIds:", Array.from(getOwnedObjectIds()));
+        renderGallery();
       } catch (error) {
         console.warn("Could not load gallery objects:", error);
+      }
+    }
+
+    async function loadStoreObjects() {
+      const requestUrl = `${API_BASE_URL}/shop`;
+      console.log("Shop objects request URL:", requestUrl);
+
+      try {
+        const response = await fetch(requestUrl, {
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        console.log("Shop objects response status:", response.status);
+        const responseText = await response.text();
+        console.log("Shop objects response body:", responseText);
+
+        if (!response.ok) {
+          throw new Error(responseText || `Could not load shop objects. Status ${response.status}.`);
+        }
+
+        storeObjects = responseText ? JSON.parse(responseText) : [];
+        console.log("Loaded shop objects:", storeObjects);
+        renderStore();
+      } catch (error) {
+        console.warn("Could not load shop objects:", error);
       }
     }
 
@@ -805,12 +956,12 @@
       const grid = document.getElementById("gallery-grid");
       grid.innerHTML = "";
       galleryObjects.forEach(obj => {
-        const id = obj.id || obj.objectId;
+        const id = obj.objectId || obj.id;
         const name = obj.name || obj.title || "Object";
         const createdAt = obj.createdAt ? formatDate(obj.createdAt) : "";
         grid.innerHTML += `
           <div class="object-card" onclick="openViewer('${id}')">
-            <div class="object-thumb">◼</div>
+            ${getObjectThumbnailMarkup(obj)}
             <div class="object-name">${name}</div>
             <div class="object-date">${createdAt}</div>
           </div>
@@ -818,15 +969,83 @@
       });
     }
 
+    function getOwnedObjectIds() {
+      return new Set(galleryObjects.map(obj => obj.objectId).filter(Boolean));
+    }
+
+    function getObjectThumbnailMarkup(obj) {
+      const thumbnailPath = obj.thumbnailUrl || obj.thumbnailPath;
+      if (!thumbnailPath) {
+        return `<div class="object-thumb">◼</div>`;
+      }
+
+      let thumbnailUrl = thumbnailPath;
+      if (!thumbnailUrl.startsWith("http")) {
+        const normalizedPath = thumbnailUrl.replace(/^\/+/, "");
+        thumbnailUrl = normalizedPath.startsWith("files/")
+          ? `${API_BASE_URL}/${normalizedPath}`
+          : `${API_BASE_URL}/files/${normalizedPath}`;
+      }
+
+      return `<img class="object-thumb object-thumb-img" src="${thumbnailUrl}" alt="">`;
+    }
+
+    function getStoreSearchQuery() {
+      const input = document.getElementById("store-search");
+      return input ? input.value.trim().toLowerCase() : "";
+    }
+
+    function matchesStoreSearch(obj, query) {
+      if (!query) return true;
+
+      return [
+        obj.title,
+        obj.description,
+        obj.creatorUserId
+      ].some(value => String(value || "").toLowerCase().includes(query));
+    }
+
     function renderStore() {
       const grid = document.getElementById("store-grid");
+      const ownedObjectIds = getOwnedObjectIds();
+      const query = getStoreSearchQuery();
+      const filteredObjects = storeObjects.filter(obj => matchesStoreSearch(obj, query));
+
       grid.innerHTML = "";
-      storeObjects.forEach(obj => {
+      console.log("Current owned objectIds:", Array.from(ownedObjectIds));
+
+      if (!filteredObjects.length) {
+        grid.innerHTML = `<div class="store-empty">No store objects found.</div>`;
+        return;
+      }
+
+      filteredObjects.forEach(obj => {
+        const id = obj.objectId;
+        const title = obj.title || obj.name || "Object";
+        const description = obj.description || "";
+        const creatorUserId = obj.creatorUserId || "Unknown";
+        const type = obj.type || "PUBLIC";
+        const createdAt = obj.createdAt ? formatDate(obj.createdAt) : "";
+        const isOwned = ownedObjectIds.has(id);
+        if (!id) {
+          console.warn("Skipping shop object without backend objectId:", obj);
+          return;
+        }
         grid.innerHTML += `
-          <div class="object-card" onclick="selectStoreObject('${obj.id}')">
-            <div class="object-thumb">◼</div>
-            <div class="object-name">${obj.name}</div>
-            <div class="object-date">${obj.createdAt}</div>
+          <div class="object-card store-object-card">
+            <button class="store-object-body" type="button" onclick="selectStoreObject('${id}')">
+              ${getObjectThumbnailMarkup(obj)}
+              <div class="object-name">${title}</div>
+              ${description ? `<div class="object-description">${description}</div>` : ""}
+              <div class="object-date">By ${creatorUserId}</div>
+              <div class="store-card-meta">
+                <span class="store-type-badge ${type === "ADMIN" ? "type-admin" : "type-public"}">${type}</span>
+                ${createdAt ? `<span class="object-date">${createdAt}</span>` : ""}
+              </div>
+            </button>
+            <button class="store-buy-button" type="button" onclick="buyStoreObject('${id}')" ${isOwned ? "disabled" : ""}>
+              ${isOwned ? "Already in Gallery" : "Buy"}
+            </button>
           </div>
         `;
       });
@@ -834,29 +1053,107 @@
     }
 
     function selectStoreObject(id) {
-      selectedStoreObject = storeObjects.find(o => o.id === id);
-      document.getElementById("selected-store-name").innerText = selectedStoreObject.name + " selected";
+      selectedStoreObject = storeObjects.find(o => o.objectId === id);
+      if (!selectedStoreObject) return;
+
+      console.log("Selected store object:", selectedStoreObject);
+      const name = selectedStoreObject.name || selectedStoreObject.title || "Object";
+      document.getElementById("selected-store-name").innerText = name + " selected";
       document.getElementById("store-panel").style.display = "block";
     }
 
-    function addSelectedToGallery() {
-
+    async function addSelectedToGallery() {
       if (!selectedStoreObject) return;
+      await buyStoreObject(selectedStoreObject.objectId);
+    }
 
-      const exists = galleryObjects.some(o => o.id === selectedStoreObject.id);
-
-      if (!exists) {
-        galleryObjects.push(selectedStoreObject);
+    async function buyStoreObject(objectId) {
+      if (!getToken() || getRole() !== "user") {
+        alert("Log in before buying an object.");
+        showPublicLogin();
+        return;
       }
 
-      selectedStoreObject = null;
-      document.getElementById("store-panel").style.display = "none";
-      renderGallery();
-      showScreen("gallery");
+      const storeObject = storeObjects.find(o => o.objectId === objectId);
+      console.log("Selected store object:", storeObject);
+      console.log("ObjectId used for buy:", objectId);
+
+      if (!objectId) {
+        console.error("Cannot buy object without backend objectId:", storeObject);
+        alert("This store item is missing a backend object ID.");
+        return;
+      }
+
+      if (getOwnedObjectIds().has(objectId)) {
+        alert("Already in Gallery.");
+        return;
+      }
+
+      const buyUrl = `${API_BASE_URL}/shop/${objectId}/buy`;
+
+      try {
+        console.log("Shop buy URL:", buyUrl);
+        console.log("Shop buy objectId:", objectId);
+        const response = await fetch(buyUrl, {
+          method: "POST",
+          headers: {
+            ...getAuthHeaders(),
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        console.log("Shop buy response status:", response.status);
+        const responseText = await response.text();
+        console.log("Shop buy response body:", responseText);
+
+        if (!response.ok) {
+          console.error("Shop buy failed for object:", storeObject);
+
+          let errorMessage = responseText || `Purchase failed with status ${response.status}.`;
+          try {
+            const errorBody = responseText ? JSON.parse(responseText) : {};
+            errorMessage = errorBody.message || errorBody.error || errorMessage;
+          } catch (error) {
+            // Keep raw response text.
+          }
+          errorMessage = Array.isArray(errorMessage) ? errorMessage.join(" ") : String(errorMessage);
+
+          if (response.status === 400 && errorMessage.toLowerCase().includes("uuid")) {
+            console.error("Backend expected UUID objectId, frontend sent:", objectId, storeObject);
+          }
+
+          if (errorMessage.toLowerCase().includes("already")) {
+            throw new Error("You already own this object.");
+          }
+
+          if (errorMessage.toLowerCase().includes("coin") || errorMessage.toLowerCase().includes("insufficient")) {
+            throw new Error("Not enough coins to buy this object.");
+          }
+
+          throw new Error(errorMessage);
+        }
+
+        selectedStoreObject = null;
+        document.getElementById("store-panel").style.display = "none";
+        await loadGalleryObjects();
+        console.log("Refreshed Gallery after buy:", galleryObjects);
+        await loadStoreObjects();
+        await refreshCoins();
+        console.log("Refreshed coins after buy:", localStorage.getItem(AUTH_COINS_KEY));
+        alert("Object added to Gallery.");
+        showScreen("gallery");
+      } catch (error) {
+        console.error("Shop purchase failed:", error);
+        if (error instanceof TypeError) {
+          alert("Could not reach backend.");
+        } else {
+          alert(error.message || "Could not add object to gallery.");
+        }
+      }
     }
 
     function openViewer(id) {
-      window.location.href = `/ar/viewer`; //?object=${id} each object opens viewer with own object id
+      window.location.href = `/ar/viewer?object=${encodeURIComponent(id)}`;
     }
 
     function showProcessing() {
@@ -893,6 +1190,19 @@
         activeNavButton.classList.add("active");
       }
 
+      if (id === "gallery" || id === "store") {
+        renderUserInfoChip();
+        refreshCoins();
+      }
+
+      if (id === "gallery") {
+        loadGalleryObjects();
+      }
+
+      if (id === "store") {
+        loadGalleryObjects().then(() => loadStoreObjects());
+      }
+
       if (id === "camera") {
         startCamera();
         updateCaptureControls();
@@ -922,6 +1232,7 @@
       });
 
       loadObjects();
+      renderUserInfoChip();
       showAuthenticatedView();
     }
 
