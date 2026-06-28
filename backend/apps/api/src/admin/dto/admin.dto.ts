@@ -24,6 +24,14 @@ export class AdminUserIdResponseDto {
   createdAt!: string;
 }
 
+export class AdminRemoveUserResponseDto {
+  @ApiProperty()
+  removedUserId!: string;
+
+  @ApiProperty()
+  newUserId!: string;
+}
+
 export class AdminUserResponseDto {
   @ApiProperty()
   userId!: string;

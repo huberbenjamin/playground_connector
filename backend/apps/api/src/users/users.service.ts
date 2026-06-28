@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { User, UserState } from '@prisma/client';
+import { ADMIN_CREATOR_ID } from '@marketplace/shared-types';
 import { UsersRepository } from './users.repository';
 import { UserPoolService } from './user-pool.service';
 
@@ -47,6 +48,27 @@ export class UsersService {
   async getCoins(userId: string): Promise<number> {
     const user = await this.getMe(userId);
     return user.coins;
+  }
+
+  async removeUserByAdmin(
+    userId: string,
+  ): Promise<{ removedUserId: string; newUserId: string }> {
+    if (userId === ADMIN_CREATOR_ID) {
+      throw new BadRequestException('Cannot remove the system user');
+    }
+
+    const user = await this.usersRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.state === UserState.REMOVED) {
+      throw new BadRequestException('User is already removed');
+    }
+
+    const newUserId =
+      await this.userPoolService.removeUserAndReplenishPool(userId);
+
+    return { removedUserId: userId, newUserId };
   }
 
   async addCoins(userId: string, amount: number): Promise<User> {

@@ -317,6 +317,31 @@ Authorization: Bearer <accessToken>
 
 ---
 
+### DELETE /admin/users/:userId
+
+**Auth:** Admin JWT
+
+**Path parameter:** `userId` — exactly six digits
+
+**Flow:**
+1. Marks the user as `REMOVED` and cleans up their object ownership (same logic as automatic eviction when the active-user cap is reached)
+2. Creates a new `PREGENERATED` user with a fresh 6-digit ID and 10 coins so the pool stays at 10 usable users
+
+**Response (200):**
+
+```json
+{
+  "removedUserId": "123456",
+  "newUserId": "789012"
+}
+```
+
+**Errors:**
+- `400` — invalid `userId` format, system user (`000000`), or user already removed
+- `404` — user not found
+
+---
+
 ### POST /admin/objects
 
 **Auth:** Admin JWT

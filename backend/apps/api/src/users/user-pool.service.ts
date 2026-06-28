@@ -37,6 +37,11 @@ export class UserPoolService {
     return id;
   }
 
+  async removeUserAndReplenishPool(userId: string): Promise<string> {
+    await this.userCleanupService.removeUser(userId);
+    return this.generateNewPregeneratedUser();
+  }
+
   async evictOldestActiveIfNeeded(excludeUserId?: string): Promise<void> {
     let activeCount = await this.usersRepository.countActive();
 
@@ -46,8 +51,7 @@ export class UserPoolService {
         break;
       }
 
-      await this.userCleanupService.removeUser(oldest.id);
-      await this.generateNewPregeneratedUser();
+      await this.removeUserAndReplenishPool(oldest.id);
       activeCount = await this.usersRepository.countActive();
     }
   }

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -26,6 +27,7 @@ import {
   AddCoinsDto,
   AdminObjectResponseDto,
   AdminStatsResponseDto,
+  AdminRemoveUserResponseDto,
   AdminUserIdResponseDto,
   AdminUserResponseDto,
 } from './dto/admin.dto';
@@ -70,6 +72,19 @@ export class AdminController {
       throw new BadRequestException('userId must be exactly six digits');
     }
     return this.adminService.addCoins(userId, body.amount);
+  }
+
+  @Delete('users/:userId')
+  @ApiOperation({
+    summary:
+      'Remove a user and create a new pregenerated user to keep the pool at 10',
+  })
+  @ApiResponse({ status: 200, type: AdminRemoveUserResponseDto })
+  removeUser(@Param('userId') userId: string) {
+    if (!USER_ID_PATTERN.test(userId)) {
+      throw new BadRequestException('userId must be exactly six digits');
+    }
+    return this.adminService.removeUser(userId);
   }
 
   @Post('objects')

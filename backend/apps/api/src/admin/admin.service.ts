@@ -64,6 +64,10 @@ export class AdminService {
     };
   }
 
+  async removeUser(userId: string) {
+    return this.usersService.removeUserByAdmin(userId);
+  }
+
   async createAdminObject(
     title: string,
     description: string,
