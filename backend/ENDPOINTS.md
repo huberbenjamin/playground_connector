@@ -155,7 +155,7 @@ Authorization: Bearer <accessToken>
 **Flow:**
 1. Validates 1–6 images (.jpg, .jpeg, .png, .webp)
 2. Checks the user has enough coins for the selected `listingType` (no charge yet)
-3. Forwards images to the Python service `POST /generate-sog`
+3. Converts uploaded images to PNG and forwards them to the Python service `POST /generate-sog`
 4. On success: deducts coins, stores `.sog` + thumbnail, creates ownership record
 
 **Response (200):** Created object

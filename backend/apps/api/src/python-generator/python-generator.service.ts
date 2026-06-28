@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import FormData from 'form-data';
 import { GenerateSogResponse } from '@marketplace/shared-types';
+import { convertUploadsToPng } from './image-converter';
 
 export const SERVER_TOKEN_HEADER = 'X-Server-Token';
 const NGROK_SKIP_BROWSER_WARNING_HEADER = 'ngrok-skip-browser-warning';
@@ -48,12 +49,23 @@ export class PythonGeneratorService implements OnModuleInit {
   }
 
   async generateSog(images: Express.Multer.File[]): Promise<Buffer> {
+    let pngImages;
+    try {
+      pngImages = await convertUploadsToPng(images);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to convert uploads to PNG: ${message}`);
+      throw new ServiceUnavailableException(
+        `Failed to convert uploaded images to PNG: ${message}`,
+      );
+    }
+
     const formData = new FormData();
 
-    for (const image of images) {
+    for (const image of pngImages) {
       formData.append('images', image.buffer, {
-        filename: image.originalname,
-        contentType: image.mimetype,
+        filename: image.filename,
+        contentType: 'image/png',
       });
     }
 
@@ -68,14 +80,17 @@ export class PythonGeneratorService implements OnModuleInit {
 
     const targetUrl = `${this.baseUrl}/generate-sog`;
     this.logger.log(
-      `Calling Python generator at ${targetUrl} with ${images.length} image(s)`,
+      `Calling Python generator at ${targetUrl} with ${pngImages.length} PNG image(s)`,
     );
+
+    // Node fetch does not stream the `form-data` package correctly; send a full buffer.
+    const body = new Uint8Array(formData.getBuffer());
 
     let response: Response;
     try {
       response = await fetch(targetUrl, {
         method: 'POST',
-        body: formData as unknown as BodyInit,
+        body,
         headers,
       });
     } catch (error) {
