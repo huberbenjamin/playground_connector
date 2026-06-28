@@ -28,40 +28,49 @@
       mindFileUrl: "{{ url_for('static', filename='assets/targets.mind') }}",
       markerCount: 6,// 6,
       maxTrack: 2,
+      apiBaseUrl: {{ api_base_url | tojson }},
+      authTokenKey: "accessToken",
+      fetchBackendGallery: true,
       galleryObjects: [
         {
           id: "demo-01",
           name: "Demo 01",
+          description: "Gaussian splat demo object 01. Replace this text later with metadata from your backend.",
           url: "{{ url_for('static', filename='assets/demo/object01.sog') }}",
           thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object01.jpg') }}"
         },
         {
           id: "demo-02",
           name: "Demo 02",
+          description: "Gaussian splat demo object 02. Replace this text later with metadata from your backend.",
           url: "{{ url_for('static', filename='assets/demo/object02.sog') }}",
           thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object02.jpg') }}"
         },
         {
           id: "demo-03",
           name: "Demo 03",
+          description: "Gaussian splat demo object 03. Replace this text later with metadata from your backend.",
           url: "{{ url_for('static', filename='assets/demo/object03.sog') }}",
           thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object03.jpg') }}"
         },
         {
           id: "demo-04",
           name: "Demo 04",
+          description: "Gaussian splat demo object 04. Replace this text later with metadata from your backend.",
           url: "{{ url_for('static', filename='assets/demo/object04.sog') }}",
           thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object04.jpg') }}"
         },
         {
           id: "demo-05",
           name: "Demo 05",
+          description: "Gaussian splat demo object 05. Replace this text later with metadata from your backend.",
           url: "{{ url_for('static', filename='assets/demo/object05.sog') }}",
           thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object05.jpg') }}"
         },
         {
           id: "demo-06",
           name: "Demo 06",
+          description: "Gaussian splat demo object 06. Replace this text later with metadata from your backend.",
           url: "{{ url_for('static', filename='assets/demo/object06.sog') }}",
           thumbnailUrl: "{{ url_for('static', filename='assets/demo/thumbs/object06.jpg') }}"
         },
@@ -141,8 +150,42 @@
 
       <div id="marker-slot-row" aria-label="Assigned marker slots"></div>
 
-
       <div id="object-collection" aria-label="Objects"></div>
+    </section>
+
+
+    <div id="sog-download-overlay" aria-hidden="true">
+      <div id="sog-download-card" role="dialog" aria-modal="true" aria-labelledby="sog-download-title">
+        <div id="sog-download-spinner" aria-hidden="true"></div>
+        <h2 id="sog-download-title">Preparing AR objects</h2>
+        <p id="sog-download-message">Loading your gallery objects...</p>
+        <div id="sog-download-progress" aria-hidden="true">
+          <div id="sog-download-progress-bar"></div>
+        </div>
+        <p id="sog-download-count">0 / 0 downloaded</p>
+      </div>
+    </div>
+
+    <div id="object-info-backdrop" aria-hidden="true"></div>
+
+    <section id="object-info-sheet" aria-label="Selected object information" aria-hidden="true">
+      <div id="object-info-grabber" aria-hidden="true"></div>
+
+      <header id="object-info-header">
+        <div id="object-info-thumbnail-wrap">
+          <div id="object-info-fallback">SOG</div>
+          <img id="object-info-thumbnail" alt="" />
+        </div>
+
+        <div id="object-info-heading">
+          <p id="object-info-marker">Marker 0</p>
+          <h2 id="object-info-title">Object</h2>
+        </div>
+
+        <button id="object-info-close" type="button" aria-label="Close object information">×</button>
+      </header>
+
+      <p id="object-info-description">No description has been added for this object yet.</p>
     </section>
   </main>
 </body>

@@ -579,11 +579,12 @@
       display: none;
       justify-content: space-around;
       align-items: center;
+      padding: 10px 20px;
     }
     .nav-item {
       border: none;
       background: none;
-      font-size: 24px;
+      font-size: 18px;
       color: #999;
       cursor: pointer;
     }
@@ -673,5 +674,121 @@
       font-size: 32px;
       margin-bottom: 24px;
       cursor: pointer;
+    }
+
+    .playground-screen {
+      background: #f7f7f8;
+      color: #111;
+      padding: 24px 18px 96px;
+      overflow-y: auto;
+    }
+    
+    .playground-hero {
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 20px;
+      border: 1px solid #e7e7ea;
+      border-radius: 28px;
+      background: #ffffff;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+    
+    .playground-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      padding: 8px 13px;
+      border-radius: 999px;
+      background: #f0f0f3;
+      color: #555;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    
+    .playground-hero h1 {
+      margin: 0;
+      color: #111;
+      font-size: clamp(38px, 10vw, 72px);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+    
+    .playground-subtitle {
+      max-width: 520px;
+      margin: 18px auto 0;
+      color: #666;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    
+    .playground-start-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 54px;
+      margin-top: 28px;
+      padding: 0 24px;
+      border-radius: 16px;
+      background: #111;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    }
+    
+    .playground-start-button:active {
+      transform: scale(0.98);
+    }
+    
+    .playground-feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 28px;
+    }
+    
+    .playground-feature-card {
+      padding: 16px;
+      border: 1px solid #e8e8ec;
+      border-radius: 18px;
+      background: #fafafa;
+      text-align: left;
+    }
+    
+    .playground-feature-card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #111;
+      font-size: 14px;
+    }
+    
+    .playground-feature-card span {
+      display: block;
+      color: #666;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    
+    @media (max-width: 640px) {
+      .playground-screen {
+        padding: 32px 24px 92px;
+        transform: scale(1.15);
+      }
+    
+      .playground-hero {
+        padding: 24px 18px;
+      }
+    
+      .playground-feature-grid {
+        grid-template-columns: 1fr;
+      }
+    
+      .playground-start-button {
+        width: 100%;
+      }
     }
   

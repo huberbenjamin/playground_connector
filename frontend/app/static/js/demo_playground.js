@@ -21,21 +21,49 @@ const drawerToggle = document.querySelector("#drawer-toggle");
 const objectDrawer = document.querySelector("#object-drawer");
 const markerSlotRow = document.querySelector("#marker-slot-row");
 const objectCollection = document.querySelector("#object-collection");
+const objectInfoBackdrop = document.querySelector("#object-info-backdrop");
+const objectInfoSheet = document.querySelector("#object-info-sheet");
+const objectInfoCloseButton = document.querySelector("#object-info-close");
+const objectInfoThumbnail = document.querySelector("#object-info-thumbnail");
+const objectInfoFallback = document.querySelector("#object-info-fallback");
+const objectInfoTitle = document.querySelector("#object-info-title");
+const objectInfoMarker = document.querySelector("#object-info-marker");
+const objectInfoDescription = document.querySelector("#object-info-description");
+const sogDownloadOverlay = document.querySelector("#sog-download-overlay");
+const sogDownloadMessage = document.querySelector("#sog-download-message");
+const sogDownloadProgressBar = document.querySelector("#sog-download-progress-bar");
+const sogDownloadCount = document.querySelector("#sog-download-count");
 const tabButtons = document.querySelectorAll(".tab-button");
 
 const markerCount = config.markerCount ?? 6;
 const legacyDemoObjects = Array.isArray(config.demoObjects) ? config.demoObjects : [];
 const configuredGalleryObjects = Array.isArray(config.galleryObjects) ? config.galleryObjects : [];
+const fallbackGalleryObjects = Array.isArray(config.fallbackGalleryObjects) ? config.fallbackGalleryObjects : [];
+
+const API_BASE_URL = String(config.apiBaseUrl ?? "").replace(/\/$/, "");
+const AUTH_TOKEN_KEY = config.authTokenKey ?? "accessToken";
+const FETCH_BACKEND_GALLERY = config.fetchBackendGallery !== false;
+const THUMBNAIL_CACHE_NAME = config.thumbnailCacheName || "connectar-thumbnail-cache-v1";
+const SOG_PREFETCH_CONCURRENCY = Math.max(1, Math.min(3, Number(config.sogPrefetchConcurrency || 2)));
 
 const multitrackButton = document.querySelector("#multitrack-button");
 const MULTITRACK_STORAGE_KEY = "demo-playground-enable-multi-track";
 let currentMaxTrack = Number(localStorage.getItem(MULTITRACK_STORAGE_KEY)) || 1;
 
-// Single-library mode. For now, the old demo objects are treated as Gallery objects.
-// Later your backend can fill galleryObjects with user-owned objects.
-const galleryObjects = configuredGalleryObjects.length > 0
+// The picker starts with local/static objects as a fallback, then replaces them
+// with owned backend objects after /me and /objects succeed.
+let galleryObjects = configuredGalleryObjects.length > 0
   ? configuredGalleryObjects
-  : legacyDemoObjects;
+  : (fallbackGalleryObjects.length > 0 ? fallbackGalleryObjects : legacyDemoObjects);
+
+let currentUserProfile = null;
+let galleryLoadState = "idle";
+let galleryLoadError = "";
+let sogPreloadPromise = null;
+const sogBlobUrlByRemoteUrl = new Map();
+const sogDownloadPromiseByRemoteUrl = new Map();
+const thumbnailBlobUrlByRemoteUrl = new Map();
+const thumbnailDownloadPromiseByRemoteUrl = new Map();
 
 let mindarThree = null;
 let renderer = null;
@@ -44,6 +72,7 @@ let camera = null;
 let hasSetup = false;
 let isRunning = false;
 let activeMarkerIndex = 0;
+let selectedInfoMarkerIndex = null;
 let isLogVisible = false;
 
 const markerStates = new Map();
@@ -166,6 +195,518 @@ function findObjectById(objectId) {
   return getAllObjects().find((object) => object.id === objectId) ?? null;
 }
 
+function getObjectDescription(object) {
+  if (!object) return "";
+  return object.description ??
+    object.shortDescription ??
+    "No description has been added for this object yet.";
+}
+
+function getAccessToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function getBackendHeaders() {
+  const token = getAccessToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "ngrok-skip-browser-warning": "true"
+  };
+}
+
+function buildApiUrl(path) {
+  if (!API_BASE_URL) return path;
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function normalizeBackendAssetUrl(value) {
+  if (!value) return "";
+
+  const url = String(value);
+  if (/^(https?:|blob:|data:)/i.test(url)) {
+    return url;
+  }
+
+  if (!API_BASE_URL) {
+    return url;
+  }
+
+  return `${API_BASE_URL}/${url.replace(/^\/+/, "")}`;
+}
+
+
+function toArSogProxyUrl(value) {
+  if (!value) return "";
+
+  const url = String(value);
+  if (/^(blob:|data:)/i.test(url)) {
+    return url;
+  }
+
+  // Local/static demo SOG files should stay local.
+  if (!url.includes("/files/sog/") && !url.startsWith("files/sog/")) {
+    return url;
+  }
+
+  const filename = url.split("?")[0].split("/").pop();
+  if (!filename) return "";
+
+  // Spark needs a normal URL that ends in .sog. Flask will proxy this route
+  // to the backend /files/sog/... URL and add the ngrok skip header server-side.
+  return `/ar/sog/${encodeURIComponent(filename)}`;
+}
+
+function isApiAssetUrl(url) {
+  if (!url || !API_BASE_URL) return false;
+  return String(url).startsWith(API_BASE_URL);
+}
+
+function getRemoteThumbnailUrl(object) {
+  if (!object) return "";
+  return object.remoteThumbnailUrl || object.originalThumbnailUrl || object.thumbnailUrl || "";
+}
+
+function shouldFetchThumbnailThroughBackend(url) {
+  return Boolean(url) &&
+    /^(https?:)/i.test(url) &&
+    !/^(blob:|data:)/i.test(url) &&
+    isApiAssetUrl(url);
+}
+
+async function openNamedCache(cacheName) {
+  if (!("caches" in window)) return null;
+
+  try {
+    return await caches.open(cacheName);
+  } catch (error) {
+    console.warn(`Cache Storage is unavailable for ${cacheName}; using memory-only blobs.`, error);
+    return null;
+  }
+}
+
+async function fetchImageWithNgrokHeader(url) {
+  const response = await fetch(url, {
+    headers: {
+      "ngrok-skip-browser-warning": "true"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Thumbnail request failed with status ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    throw new Error(`Thumbnail request returned ${contentType || "an unknown content type"} instead of an image.`);
+  }
+
+  return response;
+}
+
+async function ensureObjectThumbnailCached(object) {
+  const remoteUrl = getRemoteThumbnailUrl(object);
+  if (!remoteUrl) return "";
+
+  object.remoteThumbnailUrl = remoteUrl;
+
+  if (!shouldFetchThumbnailThroughBackend(remoteUrl)) {
+    return remoteUrl;
+  }
+
+  if (object.cachedThumbnailUrl) {
+    return object.cachedThumbnailUrl;
+  }
+
+  const existingBlobUrl = thumbnailBlobUrlByRemoteUrl.get(remoteUrl);
+  if (existingBlobUrl) {
+    object.cachedThumbnailUrl = existingBlobUrl;
+    return existingBlobUrl;
+  }
+
+  if (thumbnailDownloadPromiseByRemoteUrl.has(remoteUrl)) {
+    const blobUrl = await thumbnailDownloadPromiseByRemoteUrl.get(remoteUrl);
+    object.cachedThumbnailUrl = blobUrl;
+    return blobUrl;
+  }
+
+  const downloadPromise = (async () => {
+    const cache = await openNamedCache(THUMBNAIL_CACHE_NAME);
+    let response = cache ? await cache.match(remoteUrl) : null;
+
+    if (!response) {
+      response = await fetchImageWithNgrokHeader(remoteUrl);
+      if (cache) {
+        try {
+          await cache.put(remoteUrl, response.clone());
+        } catch (error) {
+          console.warn("Could not write thumbnail to Cache Storage", remoteUrl, error);
+        }
+      }
+    }
+
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    console.log("Blob object:", blob);
+    console.log("Blob size:", blob.size);
+    console.log("Blob type:", blob.type);
+    console.log("Blob URL:", blobUrl);
+
+    thumbnailBlobUrlByRemoteUrl.set(remoteUrl, blobUrl);
+    return blobUrl;
+  })();
+
+  thumbnailDownloadPromiseByRemoteUrl.set(remoteUrl, downloadPromise);
+
+  try {
+    const blobUrl = await downloadPromise;
+    object.cachedThumbnailUrl = blobUrl;
+    return blobUrl;
+  } finally {
+    thumbnailDownloadPromiseByRemoteUrl.delete(remoteUrl);
+  }
+}
+
+function loadObjectThumbnailIntoImage(image, object) {
+  if (!image) return;
+
+  const remoteUrl = getRemoteThumbnailUrl(object);
+  image.alt = object?.name || "";
+  image.dataset.thumbnailUrl = remoteUrl;
+
+  if (!remoteUrl) {
+    image.removeAttribute("src");
+    image.style.display = "none";
+    return;
+  }
+
+  image.style.display = "none";
+
+  ensureObjectThumbnailCached(object)
+    .then((thumbnailUrl) => {
+      if (!thumbnailUrl || image.dataset.thumbnailUrl !== remoteUrl) return;
+      image.src = thumbnailUrl;
+      image.style.display = "block";
+    })
+    .catch((error) => {
+      console.warn(`Could not load thumbnail for ${object?.name || "object"}`, error);
+      if (image.dataset.thumbnailUrl === remoteUrl) {
+        image.removeAttribute("src");
+        image.style.display = "none";
+      }
+    });
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Expected JSON but received: ${text.slice(0, 120)}`);
+  }
+}
+
+async function fetchBackendJson(path) {
+  const response = await fetch(buildApiUrl(path), {
+    headers: getBackendHeaders()
+  });
+
+  const data = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const message = data?.message || data?.error || `Request failed with status ${response.status}.`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.body = data;
+    throw error;
+  }
+
+  return data;
+}
+
+function setSogDownloadOverlayVisible(visible) {
+  if (!sogDownloadOverlay) return;
+  sogDownloadOverlay.classList.toggle("is-open", visible);
+  sogDownloadOverlay.setAttribute("aria-hidden", String(!visible));
+}
+
+function updateSogDownloadOverlay({ downloaded = 0, total = 0, failed = 0, message = "" } = {}) {
+  const safeTotal = Math.max(total, 0);
+  const safeDownloaded = Math.min(Math.max(downloaded, 0), safeTotal || downloaded);
+  const percent = safeTotal > 0 ? Math.round((safeDownloaded / safeTotal) * 100) : 0;
+
+  if (sogDownloadMessage) {
+    sogDownloadMessage.textContent = message || "Downloading your gallery objects for AR...";
+  }
+
+  if (sogDownloadProgressBar) {
+    sogDownloadProgressBar.style.width = `${percent}%`;
+  }
+
+  if (sogDownloadCount) {
+    const failedText = failed > 0 ? ` · ${failed} failed` : "";
+    sogDownloadCount.textContent = `${safeDownloaded} / ${safeTotal} ready${failedText}`;
+  }
+}
+
+function getOriginalSogUrl(object) {
+  if (!object) return "";
+  return object.remoteUrl || object.originalUrl || object.originalSogUrl || object.url || "";
+}
+
+function getSogUrlForSpark(object) {
+  if (!object) return "";
+  return object.url || toArSogProxyUrl(getOriginalSogUrl(object));
+}
+
+function shouldPreloadSogUrl(url) {
+  return Boolean(url) && !/^(blob:|data:)/i.test(url);
+}
+
+async function fetchSogForWarmup(url) {
+  const headers = isApiAssetUrl(url)
+    ? { "ngrok-skip-browser-warning": "true" }
+    : {};
+
+  const response = await fetch(url, { headers });
+
+  if (!response.ok) {
+    throw new Error(`SOG request failed with status ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.toLowerCase().includes("text/html")) {
+    throw new Error("SOG request returned HTML instead of a binary file. Check the proxy route or backend file route.");
+  }
+
+  const blob = await response.clone().blob();
+  console.log("SOG warmup check:", {
+    url,
+    contentType,
+    sizeBytes: blob.size,
+    blobType: blob.type
+  });
+
+  return response;
+}
+
+async function ensureObjectSogCached(object) {
+  const sogUrlForSpark = getSogUrlForSpark(object);
+  if (!sogUrlForSpark) return "";
+
+  // Important: do not replace this with a blob: URL. Spark detects file type
+  // from the URL/name, so it needs a URL that still ends in .sog.
+  object.url = sogUrlForSpark;
+  object.cachedSogUrl = "";
+
+  if (!shouldPreloadSogUrl(sogUrlForSpark)) {
+    return sogUrlForSpark;
+  }
+
+  if (object.sogWarmupReady) {
+    return sogUrlForSpark;
+  }
+
+  if (sogDownloadPromiseByRemoteUrl.has(sogUrlForSpark)) {
+    await sogDownloadPromiseByRemoteUrl.get(sogUrlForSpark);
+    object.sogWarmupReady = true;
+    return sogUrlForSpark;
+  }
+
+  const warmupPromise = fetchSogForWarmup(sogUrlForSpark);
+  sogDownloadPromiseByRemoteUrl.set(sogUrlForSpark, warmupPromise);
+
+  try {
+    await warmupPromise;
+    object.sogWarmupReady = true;
+    return sogUrlForSpark;
+  } finally {
+    sogDownloadPromiseByRemoteUrl.delete(sogUrlForSpark);
+  }
+}
+
+async function preloadGallerySogFiles() {
+  const objectsToDownload = galleryObjects.filter((object) => shouldPreloadSogUrl(getSogUrlForSpark(object)));
+  const total = objectsToDownload.length;
+
+  if (total === 0) {
+    setSogDownloadOverlayVisible(false);
+    startButton.disabled = false;
+    return;
+  }
+
+  let completed = 0;
+  let failed = 0;
+  let nextIndex = 0;
+
+  startButton.disabled = true;
+  setSogDownloadOverlayVisible(true);
+  updateSogDownloadOverlay({
+    downloaded: completed,
+    total,
+    failed,
+    message: "Downloading your gallery objects for AR loading..."
+  });
+
+  const worker = async () => {
+    while (nextIndex < total) {
+      const object = objectsToDownload[nextIndex];
+      nextIndex += 1;
+
+      updateSogDownloadOverlay({
+        downloaded: completed,
+        total,
+        failed,
+        message: `Preparing ${object.name || "object"}...`
+      });
+
+      try {
+        await ensureObjectSogCached(object);
+      } catch (error) {
+        failed += 1;
+        console.warn(`Could not cache SOG for ${object.name}`, error);
+      } finally {
+        completed += 1;
+        updateSogDownloadOverlay({
+          downloaded: completed,
+          total,
+          failed,
+          message: failed > 0
+            ? "Some objects could not be cached, but available objects can still be used."
+            : "Downloading your gallery SOG files for offline AR loading..."
+        });
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(SOG_PREFETCH_CONCURRENCY, total) }, () => worker())
+  );
+
+  startButton.disabled = false;
+
+  if (failed > 0) {
+    setStatus(`Prepared ${total - failed}/${total} SOG files. ${failed} failed.`);
+    updateSogDownloadOverlay({
+      downloaded: completed,
+      total,
+      failed,
+      message: `Prepared ${total - failed}/${total} objects. You can still continue.`
+    });
+    window.setTimeout(() => setSogDownloadOverlayVisible(false), 1600);
+  } else {
+    setStatus(`Prepared ${total} SOG files for AR.`);
+    updateSogDownloadOverlay({
+      downloaded: completed,
+      total,
+      failed,
+      message: "All gallery objects are ready."
+    });
+    window.setTimeout(() => setSogDownloadOverlayVisible(false), 700);
+  }
+
+  if (hasSetup) {
+    await syncAllMarkerObjects();
+  }
+}
+
+function normalizeBackendGalleryObject(object) {
+  const id = object.objectId || object.id;
+  if (!id) return null;
+
+  const sogUrl = object.sogUrl || object.url;
+
+  return {
+    id,
+    objectId: id,
+    name: object.title || object.name || "Untitled object",
+    description: object.description || "No description has been added for this object yet.",
+    remoteUrl: normalizeBackendAssetUrl(sogUrl),
+    originalUrl: normalizeBackendAssetUrl(sogUrl),
+    url: toArSogProxyUrl(sogUrl),
+    thumbnailUrl: normalizeBackendAssetUrl(object.thumbnailUrl || object.thumbnailPath),
+    creatorUserId: object.creatorUserId || "",
+    type: object.type || "",
+    createdAt: object.createdAt || "",
+    ownedSince: object.ownedSince || "",
+    source: "backend"
+  };
+}
+
+function normalizeAssignmentsLength(value) {
+  const output = Array.from({ length: markerCount }, () => null);
+
+  if (!Array.isArray(value)) return output;
+
+  for (let i = 0; i < markerCount; i += 1) {
+    output[i] = typeof value[i] === "string" ? value[i] : null;
+  }
+
+  return output;
+}
+
+async function loadBackendGalleryObjects() {
+  if (!FETCH_BACKEND_GALLERY) return;
+
+  startButton.disabled = true;
+
+  const token = getAccessToken();
+  if (!token) {
+    galleryLoadState = "error";
+    galleryLoadError = "No login token found. Go back and log in first.";
+    startButton.disabled = false;
+    renderPickerUi();
+    setStatus(galleryLoadError);
+    return;
+  }
+
+  if (!API_BASE_URL) {
+    galleryLoadState = "error";
+    galleryLoadError = "No API base URL configured for the playground.";
+    startButton.disabled = false;
+    renderPickerUi();
+    setStatus(galleryLoadError);
+    return;
+  }
+
+  galleryLoadState = "loading";
+  galleryLoadError = "";
+  renderPickerUi();
+  setStatus("Loading your gallery from the backend...");
+
+  try {
+    currentUserProfile = await fetchBackendJson("/me");
+    const objects = await fetchBackendJson("/objects");
+
+    galleryObjects = Array.isArray(objects)
+      ? objects.map(normalizeBackendGalleryObject).filter(Boolean)
+      : [];
+
+    assignments = sanitizeAssignments(assignments);
+    saveAssignments();
+
+    galleryLoadState = "loaded";
+    galleryLoadError = "";
+
+    renderPickerUi();
+
+    const userLabel = currentUserProfile?.userId ? ` for user ${currentUserProfile.userId}` : "";
+    setStatus(`Loaded ${galleryObjects.length} gallery objects${userLabel}. Preparing SOG files...`);
+
+    sogPreloadPromise = preloadGallerySogFiles();
+    await sogPreloadPromise;
+  } catch (error) {
+    console.error("Could not load backend gallery", error);
+    galleryLoadState = "error";
+    galleryLoadError = error.message || "Could not load your backend gallery.";
+    startButton.disabled = false;
+    renderPickerUi();
+    setStatus(`Gallery load failed: ${galleryLoadError}`);
+  }
+}
+
 function sanitizeAssignments(value) {
   const knownIds = new Set(getAllObjects().map((object) => object.id));
   const output = Array.from({ length: markerCount }, () => null);
@@ -184,7 +725,10 @@ function loadAssignments() {
   try {
     const saved = localStorage.getItem(STORAGE_ASSIGNMENTS_KEY);
     if (!saved) return Array.from({ length: markerCount }, () => null);
-    return sanitizeAssignments(JSON.parse(saved));
+
+    // Do not sanitize against known object IDs here. Backend objects load async,
+    // so sanitizing too early would erase valid saved assignments before /objects returns.
+    return normalizeAssignmentsLength(JSON.parse(saved));
   } catch (error) {
     console.warn("Could not load marker assignments", error);
     return Array.from({ length: markerCount }, () => null);
@@ -342,6 +886,47 @@ function updateTransformReadout() {
     `Z ${Math.round(transform.rotationZ)}°`;
 }
 
+function setObjectInfoThumbnail(object) {
+  if (!objectInfoThumbnail || !objectInfoFallback) return;
+
+  objectInfoFallback.textContent = object.name?.replace(/^Demo\s*/i, "") || "SOG";
+  loadObjectThumbnailIntoImage(objectInfoThumbnail, object);
+}
+
+function openObjectInfoSheet(markerIndex) {
+  const objectId = assignments[markerIndex];
+  const object = findObjectById(objectId);
+
+  if (!object || !objectInfoSheet || !objectInfoBackdrop) {
+    return false;
+  }
+
+  selectedInfoMarkerIndex = markerIndex;
+  setActiveMarker(markerIndex, { silent: true });
+
+  objectInfoTitle.textContent = object.name;
+  objectInfoMarker.textContent = `Marker ${markerIndex}`;
+  objectInfoDescription.textContent = getObjectDescription(object);
+  setObjectInfoThumbnail(object);
+
+  objectInfoSheet.classList.add("is-open");
+  objectInfoBackdrop.classList.add("is-open");
+  objectInfoSheet.setAttribute("aria-hidden", "false");
+
+  setStatus(`Selected ${object.name} on marker ${markerIndex}.`);
+  return true;
+}
+
+function closeObjectInfoSheet() {
+  selectedInfoMarkerIndex = null;
+
+  objectInfoSheet?.classList.remove("is-open");
+  objectInfoBackdrop?.classList.remove("is-open");
+  objectInfoSheet?.setAttribute("aria-hidden", "true");
+
+  setStatus("Object info dismissed.");
+}
+
 function createMarkerSlotButton(markerIndex) {
   const objectId = assignments[markerIndex];
   const object = findObjectById(objectId);
@@ -387,9 +972,10 @@ function createObjectCard(object) {
 
   const image = document.createElement("img");
   image.className = "object-thumb";
-  image.src = object.thumbnailUrl ?? "";
   image.alt = object.name;
   image.loading = "lazy";
+  loadObjectThumbnailIntoImage(image, object);
+
   image.addEventListener("error", () => {
     image.style.display = "none";
   });
@@ -433,7 +1019,15 @@ function renderObjectCollection() {
   if (objects.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-collection";
-    empty.textContent = "Gallery is empty for now. Later you can fill this from your backend.";
+
+    if (galleryLoadState === "loading") {
+      empty.textContent = "Loading your gallery...";
+    } else if (galleryLoadState === "error") {
+      empty.textContent = galleryLoadError || "Could not load your gallery.";
+    } else {
+      empty.textContent = "Your gallery is empty. Upload or buy an object first, then reopen the playground.";
+    }
+
     objectCollection.appendChild(empty);
     return;
   }
@@ -489,12 +1083,43 @@ async function updateMarkerObject(markerIndex) {
     return;
   }
 
+  const initialSogUrl = getSogUrlForSpark(object);
+  if (!initialSogUrl) {
+    setStatus(`${object.name} does not have a SOG download URL.`);
+    return;
+  }
+
   const loadingToken = markerState.loadingToken + 1;
   markerState.loadingToken = loadingToken;
   markerState.objectId = objectId;
 
-  const splat = new SplatMesh({
+  setStatus(`Preparing ${object.name} for marker ${markerIndex}...`);
+
+  try {
+    await ensureObjectSogCached(object);
+  } catch (error) {
+    console.error(`Failed to prepare ${object.name}`, error);
+    if (markerState.loadingToken === loadingToken) {
+      setStatus(`Failed to prepare ${object.name}: ${error.message}`);
+      markerState.objectId = null;
+    }
+    return;
+  }
+
+  const sogUrlForSpark = getSogUrlForSpark(object);
+
+  console.log("SplatMesh URL check:", {
+    name: object.name,
+    originalUrl: object.originalUrl || object.remoteUrl || "",
     url: object.url,
+    cachedSogUrl: object.cachedSogUrl,
+    sogUrlForSpark,
+    isBlob: sogUrlForSpark.startsWith("blob:"),
+    endsWithSog: sogUrlForSpark.toLowerCase().split("?")[0].endsWith(".sog")
+  });
+
+  const splat = new SplatMesh({
+    url: sogUrlForSpark,
     lod: false
   });
 
@@ -585,6 +1210,10 @@ function clearMarkerAssignment(markerIndex) {
   assignments[markerIndex] = null;
   saveAssignments();
 
+  if (selectedInfoMarkerIndex === markerIndex) {
+    closeObjectInfoSheet();
+  }
+
   if (hasSetup) removeSplatFromMarker(markerIndex);
 
   renderPickerUi();
@@ -594,6 +1223,7 @@ function clearMarkerAssignment(markerIndex) {
 function clearAllAssignments() {
   assignments = Array.from({ length: markerCount }, () => null);
   saveAssignments();
+  closeObjectInfoSheet();
 
   if (hasSetup) {
     for (let markerIndex = 0; markerIndex < markerCount; markerIndex += 1) {
@@ -673,7 +1303,9 @@ function getCameraFacingLocalAxis(group) {
 }
 
 function shouldIgnoreGesture(event) {
-  return !isRunning || Boolean(event.target.closest("#ar-control-panel, #object-drawer, #drawer-toggle"));
+  return !isRunning || Boolean(event.target.closest(
+    "#ar-control-panel, #object-drawer, #drawer-toggle, #object-info-sheet, #object-info-backdrop"
+  ));
 }
 
 function getActiveMarkerState() {
@@ -710,6 +1342,10 @@ function selectMarkerFromScreenPoint(clientX, clientY) {
   if (!markerState) return false;
 
   const markerIndex = markerState.markerIndex;
+  if (openObjectInfoSheet(markerIndex)) {
+    return true;
+  }
+
   setActiveMarker(markerIndex, { silent: true });
   setStatus(`Selected marker ${markerIndex} from AR object.`);
   return true;
@@ -1049,6 +1685,11 @@ async function startAR() {
     setStatus("Loading AR scene...");
     startButton.disabled = true;
 
+    if (sogPreloadPromise) {
+      setStatus("Waiting for gallery objects to finish downloading...");
+      await sogPreloadPromise;
+    }
+
     await setupMindAR();
     await mindarThree.start();
 
@@ -1119,6 +1760,17 @@ toggleLogButton.addEventListener("click", () => {
   updateLogVisibility();
 });
 
+objectInfoThumbnail?.addEventListener("error", () => {
+  objectInfoThumbnail.style.display = "none";
+});
+objectInfoCloseButton?.addEventListener("click", closeObjectInfoSheet);
+objectInfoBackdrop?.addEventListener("click", closeObjectInfoSheet);
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && objectInfoSheet?.classList.contains("is-open")) {
+    closeObjectInfoSheet();
+  }
+});
+
 clearAssignmentsButton.addEventListener("click", clearAllAssignments);
 drawerToggle.addEventListener("click", () => {
   setDrawerExpanded(drawerToggle.getAttribute("aria-expanded") !== "true");
@@ -1141,8 +1793,10 @@ window.addEventListener("beforeunload", () => {
     mindarThree.stop();
   }
 
+  sogBlobUrlByRemoteUrl.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
   resetGestureState();
 });
 
 renderPickerUi();
 setDrawerExpanded(false);
+loadBackendGalleryObjects();

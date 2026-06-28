@@ -97,13 +97,37 @@
       </div>
     </section>
 
-    <!-- AR -->
-    <section id="ar" class="screen">
-      <h1>AR View</h1>
-      <div class="ar-placeholder">
-        <a href="{{ url_for('main.demo_playground') }}">
-          Open Demo Playground
-      </a>
+    <!-- AR / Playground -->
+    <section id="ar" class="screen playground-screen">
+      <div class="playground-hero">
+        <div class="playground-badge">Marker-based Gaussian Splat AR</div>
+
+        <h1>ConnectAR</h1>
+
+        <p class="playground-subtitle">
+          Buy objects from the store, select them from your gallery, assign them to markers, then view and adjust them directly in AR.
+        </p>
+
+        <a class="playground-start-button" href="{{ url_for('main.demo_playground') }}">
+          Start Playground →
+        </a>
+
+        <div class="playground-feature-grid">
+          <div class="playground-feature-card">
+            <strong>6 marker slots</strong>
+            <span>Assign objects to physical tracking markers.</span>
+          </div>
+
+          <div class="playground-feature-card">
+            <strong>Touch controls</strong>
+            <span>Rotate, scale, and position objects with gestures.</span>
+          </div>
+
+          <div class="playground-feature-card">
+            <strong>Saved layout</strong>
+            <span>Your marker transforms are remembered locally.</span>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -176,14 +200,14 @@
   </div>
 
   <nav id="bottom-nav" class="bottom-nav">
-    <button class="nav-item" data-screen="ar" onclick="showScreen('ar')">AR</button>
-    <button class="nav-item" data-screen="camera" onclick="showScreen('camera')">CAM</button>
-    <button class="nav-item" data-screen="gallery" onclick="showScreen('gallery')">◼</button>
-    <button class="nav-item" data-screen="store" onclick="showScreen('store')">⬇</button>
+    <button class="nav-item" data-screen="ar" onclick="showScreen('ar')">Playground</button>
+    <button class="nav-item" data-screen="camera" onclick="showScreen('camera')">Upload</button>
+    <button class="nav-item" data-screen="gallery" onclick="showScreen('gallery')">Gallery</button>
+    <button class="nav-item" data-screen="store" onclick="showScreen('store')">Store</button>
   </nav>
 
   <script>
-    const API_BASE_URL = "https://22c3-2a02-810d-2b99-2200-3178-3c22-770b-3cf6.ngrok-free.app";
+    const API_BASE_URL = {{ api_base_url | tojson }};
     const AUTH_TOKEN_KEY = "accessToken";
     const AUTH_ROLE_KEY = "role";
     const AUTH_USER_ID_KEY = "userId";
@@ -1382,10 +1406,75 @@
           </div>
         `;
       });
+
+      hydrateBackendImages(grid);
     }
 
     function getOwnedObjectIds() {
       return new Set(galleryObjects.map(obj => obj.objectId).filter(Boolean));
+    }
+
+    function escapeHtmlAttribute(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function getAbsoluteApiFileUrl(filePath) {
+      if (!filePath) return "";
+      if (filePath.startsWith("http")) return filePath;
+
+      const normalizedPath = filePath.replace(/^\/+/, "");
+      return normalizedPath.startsWith("files/")
+        ? `${API_BASE_URL}/${normalizedPath}`
+        : `${API_BASE_URL}/files/${normalizedPath}`;
+    }
+
+    async function loadImageWithNgrokHeader(img) {
+      const url = img.dataset.thumbnailSrc;
+      if (!url || img.dataset.loaded === "true" || img.dataset.loading === "true") return;
+
+      img.dataset.loading = "true";
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Thumbnail request failed with status ${response.status}.`);
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.startsWith("image/")) {
+          throw new Error(`Thumbnail response was not an image: ${contentType || "unknown content type"}.`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        if (img.dataset.objectUrl) {
+          URL.revokeObjectURL(img.dataset.objectUrl);
+        }
+
+        img.src = objectUrl;
+        img.dataset.objectUrl = objectUrl;
+        img.dataset.loaded = "true";
+        img.style.display = "";
+      } catch (error) {
+        console.warn("Could not load thumbnail:", url, error);
+        img.style.display = "none";
+      } finally {
+        img.dataset.loading = "false";
+      }
+    }
+
+    function hydrateBackendImages(root = document) {
+      root.querySelectorAll("img[data-thumbnail-src]").forEach(loadImageWithNgrokHeader);
     }
 
     function getObjectThumbnailMarkup(obj) {
@@ -1394,15 +1483,11 @@
         return `<div class="object-thumb">◼</div>`;
       }
 
-      let thumbnailUrl = thumbnailPath;
-      if (!thumbnailUrl.startsWith("http")) {
-        const normalizedPath = thumbnailUrl.replace(/^\/+/, "");
-        thumbnailUrl = normalizedPath.startsWith("files/")
-          ? `${API_BASE_URL}/${normalizedPath}`
-          : `${API_BASE_URL}/files/${normalizedPath}`;
-      }
+      const thumbnailUrl = getAbsoluteApiFileUrl(thumbnailPath);
+      const altText = escapeHtmlAttribute(obj.title || obj.name || "Object thumbnail");
+      const escapedUrl = escapeHtmlAttribute(thumbnailUrl);
 
-      return `<img class="object-thumb object-thumb-img" src="${thumbnailUrl}" alt="">`;
+      return `<img class="object-thumb object-thumb-img" data-thumbnail-src="${escapedUrl}" alt="${altText}" loading="lazy">`;
     }
 
     function getStoreSearchQuery() {
@@ -1465,6 +1550,7 @@
         `;
       });
 
+      hydrateBackendImages(grid);
     }
 
     function selectStoreObject(id) {
