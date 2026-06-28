@@ -748,6 +748,12 @@
       return "type-public";
     }
 
+    function isRemovableAdminUser(user) {
+      return /^\d{6}$/.test(user.userId || "") &&
+        user.userId !== "000000" &&
+        user.state !== "REMOVED";
+    }
+
     function setAdminStatus(id, message, show = true) {
       const status = document.getElementById(id);
       if (!status) return;
@@ -782,6 +788,7 @@
           : `<div class="admin-user-meta">Coins unavailable</div>`;
         const userId = escapeHtml(user.userId);
         const state = escapeHtml(user.state || "UNKNOWN");
+        const canRemove = isRemovableAdminUser(user);
 
         row.innerHTML = `
           <div class="admin-user-main">
@@ -795,8 +802,9 @@
             <input type="number" min="1" step="1" value="5" aria-label="Coin amount for ${userId}">
             <button type="submit">Add</button>
           </form>
-          <!-- Backend endpoint not available yet. Keep this disabled until an admin user deactivation/logout endpoint exists. -->
-          <button class="admin-secondary-button" type="button" disabled title="Backend endpoint not available">Deactivate user</button>
+          <button class="admin-danger-button" type="button" onclick="removeAdminUser('${userId}')" ${canRemove ? "" : "disabled title=\"User cannot be removed\""}>
+            Remove user
+          </button>
         `;
 
         list.appendChild(row);
@@ -881,6 +889,78 @@
       } finally {
         button.disabled = false;
         button.innerText = "Add";
+      }
+    }
+
+    async function removeAdminUser(userId) {
+      if (!/^\d{6}$/.test(userId) || userId === "000000") {
+        alert("User cannot be removed.");
+        return;
+      }
+
+      const user = adminUsers.find((item) => item.userId === userId);
+      if (!user || user.state === "REMOVED") {
+        alert("User cannot be removed.");
+        return;
+      }
+
+      const confirmed = confirm(`Remove user ${userId}? This will mark the user as removed and generate a new user ID.`);
+      if (!confirmed) {
+        return;
+      }
+
+      if (!ensureAdminSession()) {
+        return;
+      }
+
+      const removeUrl = `${API_BASE_URL}/admin/users/${encodeURIComponent(userId)}`;
+
+      console.log("Admin remove user DELETE URL:", removeUrl);
+      console.log("Admin remove user userId:", userId);
+      console.log("Admin remove user token present:", Boolean(getToken()));
+
+      try {
+        const response = await fetch(removeUrl, {
+          method: "DELETE",
+          headers: {
+            ...getAuthHeaders(),
+            "ngrok-skip-browser-warning": "true"
+          }
+        });
+
+        console.log("Admin remove user response status:", response.status);
+        const responseText = await response.text();
+        console.log("Admin remove user response body:", responseText);
+
+        if (handleAdminAuthFailure(response, responseText)) {
+          return;
+        }
+
+        const body = parseJsonResponse(responseText, {});
+
+        if (!response.ok) {
+          if (response.status === 400) {
+            throw new Error("User cannot be removed.");
+          }
+          if (response.status === 404) {
+            throw new Error("User not found.");
+          }
+
+          const message = body.message || body.error || responseText || `Remove failed with status ${response.status}.`;
+          throw new Error(Array.isArray(message) ? message.join(" ") : String(message));
+        }
+
+        const removedUserId = body.removedUserId || userId;
+        const newUserId = body.newUserId || "unknown";
+        alert(`User ${removedUserId} removed. New user ID: ${newUserId}`);
+
+        await loadAdminUsers();
+        if (adminStats || document.getElementById("admin-stats").classList.contains("active")) {
+          await loadAdminStats();
+        }
+      } catch (error) {
+        console.error("Could not remove admin user:", error);
+        alert(error.message || "User cannot be removed.");
       }
     }
 
