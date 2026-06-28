@@ -117,10 +117,10 @@
         <button class="admin-card" type="button" onclick="showAdminUsers()">
           <div class="admin-card-title">Users</div>
         </button>
-        <button class="admin-card" type="button">
+        <button class="admin-card" type="button" onclick="showAdminObjects()">
           <div class="admin-card-title">Objects</div>
         </button>
-        <button class="admin-card" type="button">
+        <button class="admin-card" type="button" onclick="showAdminStats()">
           <div class="admin-card-title">Stats</div>
         </button>
       </div>
@@ -135,6 +135,43 @@
       </div>
       <p id="admin-users-status" class="admin-status">Loading users…</p>
       <div id="admin-users-list" class="admin-users-list"></div>
+    </section>
+
+    <!-- Admin Objects -->
+    <section id="admin-objects" class="screen">
+      <div class="screen-header">
+        <button class="back" onclick="showScreen('admin')">‹</button>
+        <h1>Objects</h1>
+        <button class="logout-button" onclick="logout()">Logout</button>
+      </div>
+
+      <form id="admin-object-form" class="admin-form" onsubmit="handleCreateAdminObject(event)">
+        <h2>Add Admin Object</h2>
+        <label for="admin-object-title">Title</label>
+        <input id="admin-object-title" type="text" autocomplete="off" required>
+        <label for="admin-object-description">Description</label>
+        <textarea id="admin-object-description" rows="3" required></textarea>
+        <label for="admin-object-sog">SOG file</label>
+        <input id="admin-object-sog" type="file" accept=".sog" required>
+        <label for="admin-object-thumbnail">Thumbnail</label>
+        <input id="admin-object-thumbnail" type="file" accept="image/*" required>
+        <button id="admin-object-submit" type="submit">Create Admin Object</button>
+        <p id="admin-object-form-status" class="admin-form-status"></p>
+      </form>
+
+      <p id="admin-objects-status" class="admin-status">Loading objects…</p>
+      <div id="admin-objects-list" class="admin-objects-list"></div>
+    </section>
+
+    <!-- Admin Stats -->
+    <section id="admin-stats" class="screen">
+      <div class="screen-header">
+        <button class="back" onclick="showScreen('admin')">‹</button>
+        <h1>Stats</h1>
+        <button class="logout-button" onclick="logout()">Logout</button>
+      </div>
+      <p id="admin-stats-status" class="admin-status">Loading stats…</p>
+      <div id="admin-stats-grid" class="admin-stats-grid"></div>
     </section>
   </div>
 
@@ -158,6 +195,8 @@
     let storeObjects = [];
     let selectedStoreObject = null;
     let adminUsers = [];
+    let adminObjects = [];
+    let adminStats = null;
 
     const MIN_CAPTURED_IMAGES = 1;
     const MAX_CAPTURED_IMAGES = 6;
@@ -614,10 +653,106 @@
       });
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function readResponseText(response, label) {
+      const responseText = await response.text();
+      console.log(`${label} response body:`, responseText);
+      return responseText;
+    }
+
+    function parseJsonResponse(responseText, fallback) {
+      if (!responseText) return fallback;
+      try {
+        return JSON.parse(responseText);
+      } catch (error) {
+        console.warn("Response was not JSON:", error);
+        return fallback;
+      }
+    }
+
+    function handleAdminAuthFailure(response, responseText) {
+      if (response.status !== 401 && response.status !== 403) {
+        return false;
+      }
+
+      console.warn("Admin session expired:", response.status, responseText);
+      alert("Admin session expired");
+      clearAuthState();
+      showPublicLogin();
+      return true;
+    }
+
+    function ensureAdminSession() {
+      if (getToken() && getRole() === "admin") {
+        return true;
+      }
+
+      showPublicLogin();
+      return false;
+    }
+
+    async function fetchAdminJson(path, options = {}, fallback = null, label = "Admin request") {
+      if (!ensureAdminSession()) {
+        throw new Error("Admin session expired");
+      }
+
+      const requestUrl = `${API_BASE_URL}${path}`;
+      const token = getToken();
+      const headers = {
+        ...getAuthHeaders(),
+        "ngrok-skip-browser-warning": "true",
+        ...(options.headers || {})
+      };
+
+      console.log(`${label} URL:`, requestUrl);
+      console.log(`${label} token present:`, Boolean(token));
+
+      const response = await fetch(requestUrl, {
+        ...options,
+        headers
+      });
+
+      console.log(`${label} response status:`, response.status);
+      const responseText = await readResponseText(response, label);
+
+      if (handleAdminAuthFailure(response, responseText)) {
+        throw new Error("Admin session expired");
+      }
+
+      if (!response.ok) {
+        const body = parseJsonResponse(responseText, {});
+        const message = body.message || body.error || responseText || `Request failed with status ${response.status}.`;
+        throw new Error(Array.isArray(message) ? message.join(" ") : String(message));
+      }
+
+      return parseJsonResponse(responseText, fallback);
+    }
+
     function getUserStateBadgeClass(state) {
       if (state === "ACTIVE") return "state-active";
       if (state === "REMOVED") return "state-removed";
       return "state-pregenerated";
+    }
+
+    function getObjectTypeBadgeClass(type) {
+      if (type === "ADMIN") return "type-admin";
+      if (type === "EXCLUSIVE") return "type-exclusive";
+      return "type-public";
+    }
+
+    function setAdminStatus(id, message, show = true) {
+      const status = document.getElementById(id);
+      if (!status) return;
+      status.innerText = message || "";
+      status.style.display = show ? "block" : "none";
     }
 
     function renderAdminUsers() {
@@ -627,7 +762,7 @@
       list.innerHTML = "";
 
       if (!adminUsers.length) {
-        status.innerText = "No user IDs found.";
+        status.innerText = "No users found.";
         status.style.display = "block";
         return;
       }
@@ -642,14 +777,26 @@
         const activatedAt = user.activatedAt
           ? `<div class="admin-user-meta">Activated ${formatDate(user.activatedAt)}</div>`
           : "";
+        const coins = user.coins !== undefined && user.coins !== null
+          ? `<div class="admin-user-meta">Coins ${escapeHtml(user.coins)}</div>`
+          : `<div class="admin-user-meta">Coins unavailable</div>`;
+        const userId = escapeHtml(user.userId);
+        const state = escapeHtml(user.state || "UNKNOWN");
 
         row.innerHTML = `
           <div class="admin-user-main">
-            <div class="admin-user-id">${user.userId}</div>
-            <span class="state-badge ${getUserStateBadgeClass(user.state)}">${user.state}</span>
+            <div class="admin-user-id">${userId}</div>
+            <span class="state-badge ${getUserStateBadgeClass(user.state)}">${state}</span>
           </div>
           ${activatedAt}
+          ${coins}
           <div class="admin-user-meta">Created ${formatDate(user.createdAt)}</div>
+          <form class="admin-inline-form" onsubmit="handleAddCoins(event, '${userId}')">
+            <input type="number" min="1" step="1" value="5" aria-label="Coin amount for ${userId}">
+            <button type="submit">Add</button>
+          </form>
+          <!-- Backend endpoint not available yet. Keep this disabled until an admin user deactivation/logout endpoint exists. -->
+          <button class="admin-secondary-button" type="button" disabled title="Backend endpoint not available">Deactivate user</button>
         `;
 
         list.appendChild(row);
@@ -657,40 +804,32 @@
     }
 
     async function loadAdminUsers() {
-      const requestUrl = `${API_BASE_URL}/admin/user-ids`;
       const status = document.getElementById("admin-users-status");
       const list = document.getElementById("admin-users-list");
-      const token = getToken();
 
       status.innerText = "Loading users…";
       status.style.display = "block";
       list.innerHTML = "";
 
-      console.log("Admin users request URL:", requestUrl);
-      console.log("Admin users token present:", Boolean(token));
-
       try {
-        const response = await fetch(requestUrl, {
-          headers: {
-            ...getAuthHeaders(),
-            "ngrok-skip-browser-warning": "true"
-          }
-        });
+        const [userIds, users] = await Promise.all([
+          fetchAdminJson("/admin/user-ids", {}, [], "Admin user IDs"),
+          fetchAdminJson("/admin/users", {}, [], "Admin users")
+        ]);
+        const usersById = new Map(users.map((user) => [user.userId, user]));
+        const idsById = new Map(userIds.map((user) => [user.userId, user]));
+        const allUserIds = new Set([...idsById.keys(), ...usersById.keys()]);
 
-        console.log("Admin users response status:", response.status);
-        const responseText = await response.text();
-        console.log("Admin users response body:", responseText);
-
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}.`);
-        }
-
-        adminUsers = responseText ? JSON.parse(responseText) : [];
+        adminUsers = Array.from(allUserIds).map((userId) => ({
+          ...(idsById.get(userId) || {}),
+          ...(usersById.get(userId) || {}),
+          userId
+        }));
         console.log("Admin users parsed response:", adminUsers);
         renderAdminUsers();
       } catch (error) {
         console.error("Could not load admin users:", error);
-        status.innerText = "Could not load user IDs.";
+        status.innerText = error.message === "Admin session expired" ? "" : "Could not load users.";
         status.style.display = "block";
       }
     }
@@ -698,6 +837,202 @@
     function showAdminUsers() {
       showScreen("admin-users");
       loadAdminUsers();
+    }
+
+    async function handleAddCoins(event, userId) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const input = form.querySelector("input");
+      const button = form.querySelector("button");
+      const amount = Number.parseInt(input.value, 10);
+
+      if (!Number.isInteger(amount) || amount < 1) {
+        alert("Enter a positive coin amount.");
+        return;
+      }
+
+      button.disabled = true;
+      button.innerText = "Adding...";
+
+      try {
+        const updated = await fetchAdminJson(
+          `/admin/users/${encodeURIComponent(userId)}/add-coins`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ amount })
+          },
+          {},
+          "Admin add coins"
+        );
+
+        adminUsers = adminUsers.map((user) =>
+          user.userId === userId ? { ...user, coins: updated.coins } : user
+        );
+        renderAdminUsers();
+        await loadAdminUsers();
+      } catch (error) {
+        console.error("Could not add coins:", error);
+        if (error.message !== "Admin session expired") {
+          alert("Could not add coins.");
+        }
+      } finally {
+        button.disabled = false;
+        button.innerText = "Add";
+      }
+    }
+
+    function renderAdminObjects() {
+      const list = document.getElementById("admin-objects-list");
+      list.innerHTML = "";
+
+      if (!adminObjects.length) {
+        setAdminStatus("admin-objects-status", "No objects found.");
+        return;
+      }
+
+      setAdminStatus("admin-objects-status", "", false);
+
+      adminObjects.forEach((object) => {
+        const row = document.createElement("div");
+        row.className = "admin-object-row";
+        const type = object.type || "PUBLIC";
+
+        row.innerHTML = `
+          ${getObjectThumbnailMarkup(object)}
+          <div class="admin-object-content">
+            <div class="admin-object-title">${escapeHtml(object.title || "Object")}</div>
+            <div class="admin-user-meta">${escapeHtml(object.description || "")}</div>
+            <div class="admin-user-meta">ID ${escapeHtml(object.objectId || "")}</div>
+            <div class="admin-user-meta">Creator ${escapeHtml(object.creatorUserId || "Unknown")}</div>
+            <div class="admin-object-meta-row">
+              <span class="store-type-badge ${getObjectTypeBadgeClass(type)}">${escapeHtml(type)}</span>
+              <span class="admin-user-meta">${formatDate(object.createdAt)}</span>
+            </div>
+          </div>
+        `;
+
+        list.appendChild(row);
+      });
+    }
+
+    async function loadAdminObjects() {
+      setAdminStatus("admin-objects-status", "Loading objects…");
+      document.getElementById("admin-objects-list").innerHTML = "";
+
+      try {
+        adminObjects = await fetchAdminJson("/admin/objects", {}, [], "Admin objects");
+        console.log("Admin objects parsed response:", adminObjects);
+        renderAdminObjects();
+      } catch (error) {
+        console.error("Could not load admin objects:", error);
+        setAdminStatus("admin-objects-status", error.message === "Admin session expired" ? "" : "Could not load objects.");
+      }
+    }
+
+    function showAdminObjects() {
+      showScreen("admin-objects");
+      loadAdminObjects();
+    }
+
+    async function handleCreateAdminObject(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submitButton = document.getElementById("admin-object-submit");
+      const formStatus = document.getElementById("admin-object-form-status");
+      const title = document.getElementById("admin-object-title").value.trim();
+      const description = document.getElementById("admin-object-description").value.trim();
+      const sogFile = document.getElementById("admin-object-sog").files[0];
+      const thumbnailFile = document.getElementById("admin-object-thumbnail").files[0];
+
+      formStatus.innerText = "";
+
+      if (!title || !description || !sogFile || !thumbnailFile) {
+        formStatus.innerText = "Fill in all fields.";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("sog", sogFile);
+      formData.append("thumbnail", thumbnailFile);
+
+      submitButton.disabled = true;
+      submitButton.innerText = "Creating...";
+
+      try {
+        await fetchAdminJson(
+          "/admin/objects",
+          {
+            method: "POST",
+            body: formData
+          },
+          {},
+          "Admin create object"
+        );
+
+        form.reset();
+        formStatus.innerText = "Admin object created.";
+        await loadAdminObjects();
+      } catch (error) {
+        console.error("Could not create admin object:", error);
+        formStatus.innerText = error.message === "Admin session expired" ? "" : "Could not create admin object.";
+      } finally {
+        submitButton.disabled = false;
+        submitButton.innerText = "Create Admin Object";
+      }
+    }
+
+    function renderAdminStats() {
+      const grid = document.getElementById("admin-stats-grid");
+      grid.innerHTML = "";
+
+      if (!adminStats) {
+        setAdminStatus("admin-stats-status", "No stats found.");
+        return;
+      }
+
+      setAdminStatus("admin-stats-status", "", false);
+
+      [
+        ["Active users", adminStats.activeUsers],
+        ["Removed users", adminStats.removedUsers],
+        ["Pregenerated users", adminStats.pregeneratedUsers],
+        ["Total objects", adminStats.totalObjects],
+        ["Public objects", adminStats.publicObjects],
+        ["Exclusive objects", adminStats.exclusiveObjects],
+        ["Admin objects", adminStats.adminObjects]
+      ].forEach(([label, value]) => {
+        const card = document.createElement("div");
+        card.className = "admin-stat-card";
+        card.innerHTML = `
+          <div class="admin-stat-value">${escapeHtml(value ?? 0)}</div>
+          <div class="admin-stat-label">${escapeHtml(label)}</div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    async function loadAdminStats() {
+      setAdminStatus("admin-stats-status", "Loading stats…");
+      document.getElementById("admin-stats-grid").innerHTML = "";
+
+      try {
+        adminStats = await fetchAdminJson("/admin/stats", {}, null, "Admin stats");
+        console.log("Admin stats parsed response:", adminStats);
+        renderAdminStats();
+      } catch (error) {
+        console.error("Could not load admin stats:", error);
+        setAdminStatus("admin-stats-status", error.message === "Admin session expired" ? "" : "Could not load stats.");
+      }
+    }
+
+    function showAdminStats() {
+      showScreen("admin-stats");
+      loadAdminStats();
     }
 
     async function startCamera() {
@@ -1167,7 +1502,7 @@
     function showScreen(id) {
       const publicScreens = ["login"];
       const userScreens = ["gallery", "store", "camera", "processing", "ar"];
-      const adminScreens = ["admin", "admin-users"];
+      const adminScreens = ["admin", "admin-users", "admin-objects", "admin-stats"];
       const role = getRole();
       const token = getToken();
 
