@@ -150,10 +150,10 @@ Authorization: Bearer <accessToken>
 - `title` (string)
 - `description` (string)
 - `listingType` (`PUBLIC` = shop listing, `EXCLUSIVE` = private ownership only)
-- `images` (4–6 JPEG files, field name repeated per file)
+- `images` (1–6 image files, field name repeated per file)
 
 **Flow:**
-1. Validates 4–6 JPEG images
+1. Validates 1–6 images (.jpg, .jpeg, .png, .webp)
 2. Checks the user has enough coins for the selected `listingType` (no charge yet)
 3. Forwards images to the Python service `POST /generate-sog`
 4. On success: deducts coins, stores `.sog` + thumbnail, creates ownership record
@@ -177,7 +177,7 @@ Authorization: Bearer <accessToken>
 **Fields:**
 - `title` (string)
 - `description` (string)
-- `images` (4–6 JPEG files)
+- `images` (1–6 image files)
 
 **Note:** Prefer `POST /objects/generate` with `listingType=EXCLUSIVE`.
 
@@ -196,7 +196,7 @@ Authorization: Bearer <accessToken>
 **Fields:**
 - `title` (string)
 - `description` (string)
-- `images` (4–6 JPEG files)
+- `images` (1–6 image files)
 
 **Note:** Prefer `POST /objects/generate` with `listingType=PUBLIC`.
 
@@ -359,19 +359,13 @@ Base URL: `http://localhost:8001`
 
 ### POST /generate-sog
 
-**Auth:** `X-Worker-Secret-Token` header (must match `WORKER_SECRET_TOKEN` in `.env`)
+**Auth:** `X-Server-Token` header (must match `WORKER_SECRET_TOKEN` in `.env`)
 
 **Content-Type:** `multipart/form-data`
 
-**Fields:** `images` (4–6 image files)
+**Fields:** `images` (1–6 image files)
 
-**Response (200):**
-
-```json
-{
-  "sogFile": "<base64-encoded .sog file>"
-}
-```
+**Response (200):** Binary `.sog` file (`application/octet-stream`) or JSON with base64 `sogFile` (legacy mock)
 
 **Errors:**
 - `401` — missing or invalid worker secret token

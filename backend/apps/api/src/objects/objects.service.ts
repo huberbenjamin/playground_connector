@@ -115,7 +115,7 @@ export class ObjectsService {
     images: Express.Multer.File[],
     listingType: UserListingType,
   ): Promise<ObjectResponseDto> {
-    this.validateJpegImages(images);
+    this.validateUploadImages(images);
 
     const objectType = this.toObjectType(listingType);
     const cost = this.getCreationCost(listingType);
@@ -221,22 +221,32 @@ export class ObjectsService {
     return this.toResponse(object!);
   }
 
-  private validateJpegImages(images: Express.Multer.File[]): void {
-    if (!images || images.length < 4 || images.length > 6) {
-      throw new BadRequestException('Between 4 and 6 JPEG images are required');
+  private validateUploadImages(images: Express.Multer.File[]): void {
+    if (!images || images.length < 1 || images.length > 6) {
+      throw new BadRequestException('Between 1 and 6 images are required');
     }
+
+    const allowedMimeTypes = new Set([
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ]);
 
     for (const image of images) {
       const mimeType = image.mimetype.toLowerCase();
       const extension = image.originalname.toLowerCase();
-      const isJpeg =
-        mimeType === 'image/jpeg' ||
-        mimeType === 'image/jpg' ||
+      const isAllowed =
+        allowedMimeTypes.has(mimeType) ||
         extension.endsWith('.jpg') ||
-        extension.endsWith('.jpeg');
+        extension.endsWith('.jpeg') ||
+        extension.endsWith('.png') ||
+        extension.endsWith('.webp');
 
-      if (!isJpeg) {
-        throw new BadRequestException('Only JPEG images (.jpg, .jpeg) are allowed');
+      if (!isAllowed) {
+        throw new BadRequestException(
+          'Only image files are allowed (.jpg, .jpeg, .png, .webp)',
+        );
       }
     }
   }

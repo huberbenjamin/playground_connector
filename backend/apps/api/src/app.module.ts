@@ -13,7 +13,7 @@ import { PythonGeneratorModule } from './python-generator/python-generator.modul
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../../.env'],
+      envFilePath: ['../../.env', '.env'],
     }),
     PrismaModule,
     StorageModule,

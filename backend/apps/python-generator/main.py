@@ -11,7 +11,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 app = FastAPI(title="SOG Generator", version="1.0.0")
 
-WORKER_SECRET_HEADER = "X-Worker-Secret-Token"
+WORKER_SECRET_HEADER = "X-Server-Token"
 
 
 def get_expected_worker_token() -> str:

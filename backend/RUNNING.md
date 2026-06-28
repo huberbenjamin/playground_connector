@@ -50,7 +50,7 @@ cp .env.example .env
 | `PORT` | API port (default `3000`) |
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins. Omit to allow all (handy for ngrok dev) |
 | `PYTHON_GENERATOR_URL` | Python service URL (default `http://localhost:8001`) |
-| `WORKER_SECRET_TOKEN` | Shared secret sent as `X-Worker-Secret-Token` on API → Python requests (required) |
+| `WORKER_SECRET_TOKEN` | Shared secret sent as `X-Server-Token` on API → Python requests (required) |
 | `STORAGE_ROOT` | Path to local storage (default `../../storage` from `apps/api`) |
 
 ## Database Setup

@@ -21,7 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { UserAuthGuard } from '../auth/guards/auth.guards';
 import { CurrentUserId } from '../common/decorators/current-actor.decorator';
-import { jpegImageUploadOptions } from '../common/multer-options';
+import { imageUploadOptions } from '../common/multer-options';
 import { ObjectsService } from './objects.service';
 import {
   CreateObjectBodyDto,
@@ -57,9 +57,9 @@ export class ObjectsController {
   @Post('generate')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Generate a 3D object from JPEG images',
+    summary: 'Generate a 3D object from images',
     description:
-      'Uploads 4–6 JPEG images, checks coin balance, forwards them to the Python SOG generator, and stores the result. PUBLIC = shop listing (2 coins), EXCLUSIVE = private only (5 coins).',
+      'Uploads 1–6 images, checks coin balance, forwards them to the Python SOG generator, and stores the result. PUBLIC = shop listing (2 coins), EXCLUSIVE = private only (5 coins).',
   })
   @ApiBody({
     schema: {
@@ -72,21 +72,21 @@ export class ObjectsController {
         images: {
           type: 'array',
           items: { type: 'string', format: 'binary' },
-          minItems: 4,
+          minItems: 1,
           maxItems: 6,
         },
       },
     },
   })
   @ApiResponse({ status: 200, type: ObjectResponseDto })
-  @UseInterceptors(FilesInterceptor('images', 6, jpegImageUploadOptions))
+  @UseInterceptors(FilesInterceptor('images', 6, imageUploadOptions))
   generateObject(
     @CurrentUserId() userId: string,
     @Body() body: GenerateObjectDto,
     @UploadedFiles() images: Express.Multer.File[],
   ): Promise<ObjectResponseDto> {
     if (!images?.length) {
-      throw new BadRequestException('Between 4 and 6 JPEG images are required');
+      throw new BadRequestException('Between 1 and 6 images are required');
     }
     return this.objectsService.generateObjectFromImages(
       userId,
@@ -114,7 +114,7 @@ export class ObjectsController {
       },
     },
   })
-  @UseInterceptors(FilesInterceptor('images', 6, jpegImageUploadOptions))
+  @UseInterceptors(FilesInterceptor('images', 6, imageUploadOptions))
   createExclusive(
     @CurrentUserId() userId: string,
     @Body() body: CreateObjectBodyDto,
@@ -148,7 +148,7 @@ export class ObjectsController {
       },
     },
   })
-  @UseInterceptors(FilesInterceptor('images', 6, jpegImageUploadOptions))
+  @UseInterceptors(FilesInterceptor('images', 6, imageUploadOptions))
   createPublic(
     @CurrentUserId() userId: string,
     @Body() body: CreateObjectBodyDto,
