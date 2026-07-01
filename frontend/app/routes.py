@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request, url_for, Response, abort, current_app
+from flask import Blueprint, render_template, jsonify, url_for, Response, abort, current_app
 import requests
 
 
@@ -30,6 +30,10 @@ def inject_template_config():
 def index():
     return render_template("index.html")
 
+@main_bp.get("/health")
+def health_check():
+    return jsonify({"status": "ok"})
+
 @main_bp.get("/ar")
 def ar_index():
     return render_template("index.html")
@@ -44,9 +48,7 @@ def upload():
 
 @main_bp.get("/ar/viewer")
 def ar_viewer():
-    object_id = request.args.get("object", "extracted_001") #demo obj
-    selected = next((obj for obj in DEMO_OBJECTS if obj["id"] == object_id), DEMO_OBJECTS[0]) #demo obj
-    return render_template("demo_playground.html", selected_object=selected)
+    return render_template("viewer.html")
 
 @main_bp.get("/api/store-objects")
 def store_objects():

@@ -626,7 +626,7 @@ function normalizeBackendGalleryObject(object) {
     remoteUrl: normalizeBackendAssetUrl(sogUrl),
     originalUrl: normalizeBackendAssetUrl(sogUrl),
     url: toArSogProxyUrl(sogUrl),
-    thumbnailUrl: normalizeBackendAssetUrl(object.thumbnailUrl || object.thumbnailPath),
+    thumbnailUrl: normalizeBackendAssetUrl(object.thumbnailUrl),
     creatorUserId: object.creatorUserId || "",
     type: object.type || "",
     createdAt: object.createdAt || "",

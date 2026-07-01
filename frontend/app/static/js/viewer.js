@@ -5,7 +5,9 @@ import { XRControllerModelFactory } from "three/addons/webxr/XRControllerModelFa
 import { SplatMesh } from "@sparkjsdev/spark";
 
 const config = window.VIEWER_CONFIG || {};
-const splats = config.splats || [];
+const AUTH_TOKEN_KEY = "accessToken";
+const API_BASE_URL = config.apiBaseUrl || "";
+let splats = config.splats || [];
 
 if (splats.length === 0) {
   console.error("No splat files were configured.");
@@ -47,6 +49,77 @@ controls.update();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const clickableObjects = [];
+
+function getObjectIdFromQuery() {
+  return new URLSearchParams(window.location.search).get("object");
+}
+
+function getToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+function normalizeBackendAssetUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("/static/")) {
+    return url;
+  }
+
+  const normalizedPath = url.replace(/^\/+/, "");
+  return API_BASE_URL
+    ? `${API_BASE_URL.replace(/\/+$/, "")}/${normalizedPath}`
+    : `/${normalizedPath}`;
+}
+
+function toSogLoadUrl(url) {
+  const normalizedUrl = normalizeBackendAssetUrl(url);
+  if (!normalizedUrl) return "";
+
+  try {
+    const parsed = new URL(normalizedUrl, window.location.origin);
+    const apiBase = API_BASE_URL ? new URL(API_BASE_URL, window.location.origin) : null;
+    const isApiAsset = !apiBase || parsed.origin === apiBase.origin;
+
+    if (isApiAsset && parsed.pathname.startsWith("/files/sog/")) {
+      return `/ar/sog/${encodeURIComponent(parsed.pathname.replace("/files/sog/", ""))}`;
+    }
+  } catch (error) {
+    console.warn("Could not parse SOG URL:", normalizedUrl, error);
+  }
+
+  return normalizedUrl;
+}
+
+async function fetchSelectedObjectSplatUrl() {
+  const objectId = getObjectIdFromQuery();
+  if (!objectId || !API_BASE_URL) return "";
+
+  const token = getToken();
+  if (!token) {
+    window.location.href = "/";
+    return "";
+  }
+
+  const response = await fetch(`${API_BASE_URL}/objects/${encodeURIComponent(objectId)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "ngrok-skip-browser-warning": "true"
+    }
+  });
+
+  const responseText = await response.text();
+
+  if (response.status === 401 || response.status === 403) {
+    window.location.href = "/";
+    return "";
+  }
+
+  if (!response.ok) {
+    throw new Error(responseText || `Object request failed with status ${response.status}.`);
+  }
+
+  const object = responseText ? JSON.parse(responseText) : {};
+  return toSogLoadUrl(object.sogUrl);
+}
 
 function loadSplat(url) {
   if (currentSplat) {
@@ -323,13 +396,27 @@ function handleResize() {
 
 window.addEventListener("resize", handleResize);
 
-if (splats.length > 0) {
-  loadSplat(splats[0]);
-}
-
 document.body.appendChild(VRButton.createButton(renderer));
 
 renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
 });
+
+async function initializeViewer() {
+  try {
+    const selectedSplatUrl = await fetchSelectedObjectSplatUrl();
+    if (selectedSplatUrl) {
+      splats = [selectedSplatUrl];
+      currentIndex = 0;
+    }
+  } catch (error) {
+    console.error("Could not load selected backend object:", error);
+  }
+
+  if (splats.length > 0) {
+    loadSplat(splats[0]);
+  }
+}
+
+initializeViewer();

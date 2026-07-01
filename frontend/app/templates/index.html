@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="api-base-url" content="{{ api_base_url }}">
   <title>ML — Sharp VR Album</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
@@ -170,6 +171,24 @@
     <button class="nav-item" data-screen="store" onclick="showScreen('store')">Store</button>
   </nav>
 
+  <div id="gallery-action-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="gallery-action-title">
+    <div class="action-modal">
+      <h2 id="gallery-action-title">Object</h2>
+      <div id="gallery-action-main" class="modal-actions">
+        <button type="button" onclick="openSelectedGalleryObjectInAr()">Open in AR</button>
+        <button type="button" onclick="showGiftForm()">Send to User</button>
+        <button class="modal-secondary-button" type="button" onclick="closeGalleryActionModal()">Cancel</button>
+      </div>
+      <form id="gallery-gift-form" class="gift-form hidden" onsubmit="sendSelectedGalleryObject(event)">
+        <label for="recipient-user-id-input">Recipient User ID</label>
+        <input id="recipient-user-id-input" type="text" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="654321">
+        <p id="gift-status" class="gift-status" role="alert"></p>
+        <button id="gift-send-button" type="submit">Send</button>
+        <button class="modal-secondary-button" type="button" onclick="closeGalleryActionModal()">Cancel</button>
+      </form>
+    </div>
+  </div>
+
   <script>
     const API_BASE_URL = {{ api_base_url | tojson }};
     const MAIN_PAGE_URL = "{{ url_for('main.ar_index') }}";
@@ -184,6 +203,7 @@
     let galleryObjects = [];
     let storeObjects = [];
     let selectedStoreObject = null;
+    let selectedGalleryObject = null;
     let adminUsers = [];
     let adminObjects = [];
     let adminStats = null;
@@ -214,7 +234,15 @@
       localStorage.removeItem(AUTH_COINS_KEY);
       localStorage.removeItem(AUTH_STATE_KEY);
       localStorage.removeItem(AUTH_ACTIVATED_AT_KEY);
+      galleryObjects = [];
+      storeObjects = [];
+      selectedStoreObject = null;
+      selectedGalleryObject = null;
+      adminUsers = [];
+      adminObjects = [];
+      adminStats = null;
       renderUserInfoChip();
+      console.log("Local auth state cleared");
     }
 
     function renderUserInfoChip() {
@@ -527,21 +555,31 @@
     async function logout() {
       stopCamera();
 
-      try {
-        // Backend integration: POST /logout has no auth requirement; client discards token.
-        await fetch(`${API_BASE_URL}/logout`, {
-          method: "POST",
-          headers: {
-            "ngrok-skip-browser-warning": "true"
-          }
-        });
-      } catch (error) {
-        console.warn("Logout request failed:", error);
+      const accessToken = localStorage.getItem(AUTH_TOKEN_KEY);
+      const logoutUrl = `${API_BASE_URL}/logout`;
+
+      console.log("Starting logout");
+      console.log("Logout token exists:", Boolean(accessToken));
+      console.log("Logout URL:", logoutUrl);
+
+      if (accessToken) {
+        try {
+          const response = await fetch(logoutUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`
+            }
+          });
+
+          console.log("Logout response status:", response.status);
+        } catch (error) {
+          console.warn("Logout request failed:", error);
+        }
       }
 
       clearAuthState();
       resetCameraCaptureState();
-      showPublicLogin();
+      showScreen("login");
     }
 
     async function handleUserLogin(event) {
@@ -1111,6 +1149,181 @@
       loadAdminStats();
     }
 
+    async function startCamera() {
+      try {
+        const video = document.getElementById("camera-video");
+
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment"
+          },
+          audio: false
+        });
+
+        video.srcObject = cameraStream;
+      } catch (error) {
+        console.error("Camera access failed:", error);
+        alert("Could not access camera. Please allow camera permissions.");
+      }
+    }
+
+    function captureImage() {
+      if (capturedImages.length >= MAX_CAPTURED_IMAGES) {
+        alert(`You already captured ${MAX_CAPTURED_IMAGES} images.`);
+        updateCaptureControls();
+        return;
+      }
+
+      if (captureInProgress) {
+        return;
+      }
+
+      const video = document.getElementById("camera-video");
+      const canvas = document.getElementById("capture-canvas");
+
+      if (!video.srcObject) {
+        alert("Start the camera first.");
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      captureInProgress = true;
+      updateCaptureControls();
+
+      canvas.toBlob((blob) => {
+        captureInProgress = false;
+
+        if (!blob) {
+          updateCaptureControls();
+          return;
+        }
+
+        if (capturedImages.length >= MAX_CAPTURED_IMAGES) {
+          updateCaptureControls();
+          return;
+        }
+
+        capturedImages.push(blob);
+        updateCaptureUI(blob);
+      }, "image/jpeg", 0.9);
+    }
+
+    function updateCaptureUI(blob) {
+      document.getElementById("capture-count").innerText =
+        `${capturedImages.length} / ${MAX_CAPTURED_IMAGES} images captured`;
+
+      const previewRow = document.getElementById("preview-row");
+      if (previewRow) {
+        const img = document.createElement("img");
+        img.className = "preview-img";
+        img.src = URL.createObjectURL(blob);
+        previewRow.appendChild(img);
+      }
+
+      updateCaptureControls();
+    }
+
+    function updateCaptureControls() {
+      const captureButton = document.querySelector(".capture-button");
+      if (captureButton) {
+        captureButton.disabled =
+          captureInProgress || capturedImages.length >= MAX_CAPTURED_IMAGES;
+      }
+    }
+
+    async function uploadCapturedObject() {
+      const uploadUrl = `${API_BASE_URL}/objects/public`;
+      const formData = new FormData();
+
+      formData.append("title", "New Object");
+      formData.append("description", "Created from camera capture");
+
+      capturedImages.forEach((blob, index) => {
+        formData.append("images", blob, `capture-${index + 1}.jpg`);
+      });
+
+      console.log("Object upload URL:", uploadUrl);
+      console.log("Object upload image count:", capturedImages.length);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "ngrok-skip-browser-warning": "true"
+        },
+        body: formData
+      });
+
+      console.log("Object upload response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Object upload response body:", responseText);
+
+      let data = {};
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (error) {
+          console.warn("Object upload response was not JSON:", error);
+        }
+      }
+
+      if (!response.ok) {
+        const message = data.message || data.error || responseText || `Upload failed with status ${response.status}.`;
+        throw new Error(message);
+      }
+
+      return data;
+    }
+
+    function normalizeGalleryObject(object) {
+      const id = object.id || object.objectId || `local-${Date.now()}`;
+
+      return {
+        ...object,
+        id,
+        name: object.name || object.title || "New Object",
+        createdAt: object.createdAt ? formatDate(object.createdAt) : formatDate(new Date().toISOString())
+      };
+    }
+
+    async function continueToProcessing() {
+      if (!getToken()) {
+        alert("Log in before uploading an object.");
+        showPublicLogin();
+        return;
+      }
+
+      if (capturedImages.length == 0 ) {
+        alert("Capture at least one image first.");
+        return;
+      }
+      else if (capturedImages.length < MIN_CAPTURED_IMAGES || capturedImages.length > MAX_CAPTURED_IMAGES ) {
+        alert(`Capture ${MIN_CAPTURED_IMAGES}-${MAX_CAPTURED_IMAGES} images`);
+        return;
+      }
+
+      stopCamera();
+      showScreen("processing");
+
+      try {
+        await uploadCapturedObject();
+        resetCameraCaptureState();
+        await loadGalleryObjects();
+        await refreshCoins();
+        showScreen("gallery");
+      } catch (error) {
+        console.error("Object upload failed:", error);
+        alert(error.message || "Upload failed. Please try again.");
+        showScreen("camera");
+      }
+    }
+
     function stopCamera() {
       if (!cameraStream) return;
 
@@ -1191,13 +1404,17 @@
       const grid = document.getElementById("gallery-grid");
       grid.innerHTML = "";
       galleryObjects.forEach(obj => {
-        const id = obj.objectId || obj.id;
-        const name = obj.name || obj.title || "Object";
+        const id = obj.objectId;
+        const name = obj.title || obj.name || "Object";
         const createdAt = obj.createdAt ? formatDate(obj.createdAt) : "";
+        if (!id) {
+          console.warn("Skipping gallery object without backend objectId:", obj);
+          return;
+        }
         grid.innerHTML += `
-          <div class="object-card" onclick="openViewer('${id}')">
+          <div class="object-card" onclick="openGalleryActionModal('${id}')">
             ${getObjectThumbnailMarkup(obj)}
-            <div class="object-name">${name}</div>
+            <div class="object-name">${escapeHtml(name)}</div>
             <div class="object-date">${createdAt}</div>
           </div>
         `;
@@ -1274,7 +1491,7 @@
     }
 
     function getObjectThumbnailMarkup(obj) {
-      const thumbnailPath = obj.thumbnailUrl || obj.thumbnailPath;
+      const thumbnailPath = obj.thumbnailUrl;
       if (!thumbnailPath) {
         return `<div class="object-thumb">◼</div>`;
       }
@@ -1354,7 +1571,7 @@
       if (!selectedStoreObject) return;
 
       console.log("Selected store object:", selectedStoreObject);
-      const name = selectedStoreObject.name || selectedStoreObject.title || "Object";
+      const name = selectedStoreObject.title || selectedStoreObject.name || "Object";
       document.getElementById("selected-store-name").innerText = name + " selected";
       document.getElementById("store-panel").style.display = "block";
     }
@@ -1449,6 +1666,105 @@
       }
     }
 
+    function openGalleryActionModal(objectId) {
+      selectedGalleryObject = galleryObjects.find((object) => object.objectId === objectId) || null;
+      if (!selectedGalleryObject) return;
+
+      document.getElementById("gallery-action-title").innerText =
+        selectedGalleryObject.title || selectedGalleryObject.name || "Object";
+      document.getElementById("gallery-action-main").classList.remove("hidden");
+      document.getElementById("gallery-gift-form").classList.add("hidden");
+      document.getElementById("recipient-user-id-input").value = "";
+      setGiftStatus("");
+      document.getElementById("gallery-action-modal").classList.remove("hidden");
+    }
+
+    function closeGalleryActionModal() {
+      document.getElementById("gallery-action-modal").classList.add("hidden");
+      selectedGalleryObject = null;
+      setGiftStatus("");
+    }
+
+    function showGiftForm() {
+      document.getElementById("gallery-action-main").classList.add("hidden");
+      document.getElementById("gallery-gift-form").classList.remove("hidden");
+      document.getElementById("recipient-user-id-input").focus();
+    }
+
+    function setGiftStatus(message, isError = false) {
+      const status = document.getElementById("gift-status");
+      status.innerText = message || "";
+      status.classList.toggle("error", Boolean(isError));
+    }
+
+    function openSelectedGalleryObjectInAr() {
+      if (!selectedGalleryObject?.objectId) return;
+      openViewer(selectedGalleryObject.objectId);
+    }
+
+    async function sendSelectedGalleryObject(event) {
+      event.preventDefault();
+
+      if (!getToken() || getRole() !== "user") {
+        closeGalleryActionModal();
+        showPublicLogin();
+        return;
+      }
+
+      if (!selectedGalleryObject?.objectId) {
+        setGiftStatus("This object is missing a backend object ID.", true);
+        return;
+      }
+
+      const recipientUserId = document.getElementById("recipient-user-id-input").value.trim();
+      if (!/^\d{6}$/.test(recipientUserId)) {
+        setGiftStatus("Please enter a valid 6-digit user ID.", true);
+        return;
+      }
+
+      const sendButton = document.getElementById("gift-send-button");
+      sendButton.disabled = true;
+      sendButton.innerText = "Sending...";
+      setGiftStatus("");
+
+      try {
+        const giftUrl = `${API_BASE_URL}/objects/${selectedGalleryObject.objectId}/gift`;
+        const response = await fetch(giftUrl, {
+          method: "POST",
+          headers: {
+            ...getAuthHeaders(),
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: JSON.stringify({ recipientUserId })
+        });
+
+        const responseText = await response.text();
+        const body = parseJsonResponse(responseText, {});
+
+        if (response.status === 401 || response.status === 403) {
+          closeGalleryActionModal();
+          showPublicLogin();
+          return;
+        }
+
+        if (!response.ok) {
+          const message = body.message || body.error || responseText || `Gift failed with status ${response.status}.`;
+          throw new Error(Array.isArray(message) ? message.join(" ") : String(message));
+        }
+
+        setGiftStatus(`Object sent to user ${recipientUserId}.`);
+        await loadGalleryObjects();
+        setTimeout(closeGalleryActionModal, 700);
+      } catch (error) {
+        console.error("Object gift failed:", error);
+        setGiftStatus(error.message || "Could not send object.", true);
+      } finally {
+        sendButton.disabled = false;
+        sendButton.innerText = "Send";
+      }
+    }
+
     function openViewer(id) {
       window.location.href = `/ar/viewer?object=${encodeURIComponent(id)}`;
     }
@@ -1502,6 +1818,9 @@
 
     function initializeApp() {
       document.getElementById("user-id-input").addEventListener("input", (event) => {
+        event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
+      });
+      document.getElementById("recipient-user-id-input").addEventListener("input", (event) => {
         event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
       });
 
