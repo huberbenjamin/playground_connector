@@ -38,6 +38,10 @@ def ar_index():
 def demo_playground():
     return render_template("demo_playground.html")
 
+@main_bp.route("/ar/upload")
+def upload():
+    return render_template("upload.html")
+
 @main_bp.get("/ar/viewer")
 def ar_viewer():
     object_id = request.args.get("object", "extracted_001") #demo obj

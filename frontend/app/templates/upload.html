@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload Object — ConnectAR</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/upload.css') }}">
+</head>
+<body>
+  <div class="app upload-app">
+    <section id="upload-page" class="screen active upload-screen">
+      <div class="screen-header upload-header">
+        <button class="back" type="button" onclick="navigateMain('gallery')">‹</button>
+        <div>
+          <h1>Create Object</h1>
+          <p id="upload-coin-chip" class="upload-coin-chip">Coins loading…</p>
+        </div>
+      </div>
+
+      <form id="upload-form" class="upload-form">
+        <section class="upload-card">
+          <h2>Object details</h2>
+
+          <label for="upload-title">Title</label>
+          <input id="upload-title" type="text" autocomplete="off" maxlength="80" placeholder="My object" required>
+
+          <label for="upload-description">Description</label>
+          <textarea id="upload-description" rows="4" maxlength="400" placeholder="Describe your object" required></textarea>
+        </section>
+
+        <section class="upload-card">
+          <div class="upload-card-heading">
+            <h2>Listing type</h2>
+            <span id="selected-cost-pill" class="cost-pill">2 coins</span>
+          </div>
+
+          <div class="choice-grid two-columns" role="radiogroup" aria-label="Listing type">
+            <label class="choice-card active" id="listing-public-card">
+              <input type="radio" name="listingType" value="PUBLIC" checked>
+              <span class="choice-title">Public</span>
+              <span class="choice-meta">2 coins · visible in shop</span>
+            </label>
+
+            <label class="choice-card" id="listing-exclusive-card">
+              <input type="radio" name="listingType" value="EXCLUSIVE">
+              <span class="choice-title">Exclusive</span>
+              <span class="choice-meta">5 coins · private ownership</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="upload-card">
+          <h2>Generator</h2>
+          <label for="generator-select">Choose generator</label>
+          <select id="generator-select">
+            <option value="FREE_SPLATTER" selected>FreeSplatter</option>
+            <option value="ML_SHARP">ML-Sharp</option>
+          </select>
+          <p id="generator-hint" class="upload-help">FreeSplatter needs 4–6 pictures.</p>
+        </section>
+
+        <section class="upload-card">
+          <h2>Pictures</h2>
+          <p class="upload-help">Choose one source. Uploading pictures disables camera capture, and camera capture clears uploaded pictures.</p>
+
+          <div class="source-buttons">
+            <button id="choose-upload-mode" class="source-button" type="button">Upload pictures</button>
+            <button id="choose-camera-mode" class="source-button" type="button">Take pictures</button>
+          </div>
+
+          <div id="file-upload-panel" class="upload-source-panel hidden">
+            <label for="image-file-input">Select image files</label>
+            <input id="image-file-input" type="file" accept="image/*" multiple>
+          </div>
+
+          <div id="camera-panel" class="upload-source-panel hidden">
+            <div class="upload-camera-frame">
+              <video id="camera-video" autoplay playsinline muted></video>
+              <canvas id="capture-canvas" class="hidden"></canvas>
+            </div>
+
+            <div class="upload-camera-controls">
+              <button id="start-camera-button" type="button">Start camera</button>
+              <button id="capture-button" type="button">Capture</button>
+            </div>
+          </div>
+
+          <div class="upload-count-row">
+            <p id="image-count-text">0 images selected</p>
+            <button id="clear-images-button" type="button">Clear</button>
+          </div>
+
+          <div id="image-preview-grid" class="image-preview-grid"></div>
+        </section>
+
+        <p id="upload-status" class="upload-status" role="status"></p>
+
+        <button id="submit-upload-button" class="upload-submit-button" type="submit">
+          Generate object · 2 coins
+        </button>
+      </form>
+    </section>
+  </div>
+
+  <nav id="bottom-nav" class="bottom-nav upload-bottom-nav">
+    <button class="nav-item" type="button" onclick="navigateMain('ar')">Playground</button>
+    <button class="nav-item active" type="button">Upload</button>
+    <button class="nav-item" type="button" onclick="navigateMain('gallery')">Gallery</button>
+    <button class="nav-item" type="button" onclick="navigateMain('store')">Store</button>
+  </nav>
+
+  <script>
+    window.UPLOAD_CONFIG = {
+      apiBaseUrl: {{ api_base_url | tojson }},
+      mainPageUrl: "{{ url_for('main.ar_index') }}"
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+</body>
+</html>
