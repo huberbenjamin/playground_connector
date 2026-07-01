@@ -35,7 +35,7 @@ import {
 @UseGuards(UserAuthGuard)
 @Controller('objects')
 export class ObjectsController {
-  constructor(private readonly objectsService: ObjectsService) {}
+  constructor(private readonly objectsService: ObjectsService) { }
 
   @Get()
   @ApiOperation({ summary: 'List objects owned by the current user' })
@@ -59,7 +59,7 @@ export class ObjectsController {
   @ApiOperation({
     summary: 'Generate a 3D object from images',
     description:
-      'Uploads 1–6 images, checks coin balance, forwards them to the Python SOG generator, and stores the result. PUBLIC = shop listing (2 coins), EXCLUSIVE = private only (5 coins).',
+      'Uploads 1-6 images, checks coin balance, forwards them to the Python SOG generator, and stores the result. PUBLIC = shop listing (2 coins), EXCLUSIVE = private only (5 coins).',
   })
   @ApiBody({
     schema: {

@@ -20,11 +20,13 @@ enum ObjectType {
 }
 
 model User {
-  id          String    @id @db.VarChar(6)
-  state       UserState @default(PREGENERATED)
-  coins       Int       @default(10)
-  activatedAt DateTime?
-  createdAt   DateTime  @default(now())
+  id                String    @id @db.VarChar(6)
+  state             UserState @default(PREGENERATED)
+  coins             Int       @default(10)
+  activatedAt       DateTime?
+  activeSessionId   String?   @db.Uuid
+  sessionExpiresAt  DateTime?
+  createdAt         DateTime  @default(now())
 
   ownerships     ObjectOwner[]
   createdObjects MarketplaceObject[] @relation("ObjectCreator")

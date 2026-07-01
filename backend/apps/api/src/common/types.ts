@@ -4,6 +4,7 @@ export const JWT_STRATEGY_NAME = 'jwt';
 
 export interface AuthenticatedUser {
   userId: string;
+  sessionId: string;
   role: ActorRole.USER;
 }
 

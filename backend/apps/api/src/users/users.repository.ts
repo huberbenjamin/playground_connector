@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { Prisma, User, UserState } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.module';
 import { ADMIN_CREATOR_ID, MAX_ACTIVE_USERS } from '@marketplace/shared-types';
 
@@ -81,8 +82,67 @@ export class UsersRepository {
   markRemoved(id: string): Promise<User> {
     return this.prisma.user.update({
       where: { id },
-      data: { state: UserState.REMOVED, activatedAt: null },
+      data: {
+        state: UserState.REMOVED,
+        activatedAt: null,
+        activeSessionId: null,
+        sessionExpiresAt: null,
+      },
     });
+  }
+
+  hasActiveSession(user: User): boolean {
+    return !!(
+      user.activeSessionId &&
+      user.sessionExpiresAt &&
+      user.sessionExpiresAt > new Date()
+    );
+  }
+
+  async startSession(userId: string, sessionExpiresAt: Date): Promise<string> {
+    const sessionId = randomUUID();
+
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new UnauthorizedException('Invalid user ID');
+      }
+
+      if (this.hasActiveSession(user)) {
+        throw new UnauthorizedException('User is already logged in');
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { activeSessionId: sessionId, sessionExpiresAt },
+      });
+    });
+
+    return sessionId;
+  }
+
+  async endSession(userId: string, sessionId: string): Promise<void> {
+    const result = await this.prisma.user.updateMany({
+      where: { id: userId, activeSessionId: sessionId },
+      data: { activeSessionId: null, sessionExpiresAt: null },
+    });
+
+    if (result.count === 0) {
+      throw new UnauthorizedException('Invalid session');
+    }
+  }
+
+  async isSessionValid(userId: string, sessionId: string): Promise<boolean> {
+    const user = await this.findById(userId);
+    if (!user || user.state === UserState.REMOVED) {
+      return false;
+    }
+
+    return (
+      user.activeSessionId === sessionId &&
+      !!user.sessionExpiresAt &&
+      user.sessionExpiresAt > new Date()
+    );
   }
 
   updateCoins(id: string, coins: number): Promise<User> {

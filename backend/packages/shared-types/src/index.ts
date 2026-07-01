@@ -18,6 +18,7 @@ export enum ActorRole {
 export interface JwtUserPayload {
   sub: string;
   role: ActorRole.USER;
+  sessionId: string;
 }
 
 export interface JwtAdminPayload {

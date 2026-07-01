@@ -67,7 +67,12 @@ export class UserCleanupService {
 
       await tx.user.update({
         where: { id: userId },
-        data: { state: 'REMOVED', activatedAt: null },
+        data: {
+          state: 'REMOVED',
+          activatedAt: null,
+          activeSessionId: null,
+          sessionExpiresAt: null,
+        },
       });
     });
   }

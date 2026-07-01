@@ -26,6 +26,10 @@ export class UsersService {
       throw new UnauthorizedException('User has been removed');
     }
 
+    if (this.usersRepository.hasActiveSession(user)) {
+      throw new UnauthorizedException('User is already logged in');
+    }
+
     if (user.state === UserState.PREGENERATED) {
       const activeCount = await this.usersRepository.countActive();
       if (activeCount >= 10) {
@@ -35,6 +39,14 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async startSession(userId: string, sessionExpiresAt: Date): Promise<string> {
+    return this.usersRepository.startSession(userId, sessionExpiresAt);
+  }
+
+  async endSession(userId: string, sessionId: string): Promise<void> {
+    await this.usersRepository.endSession(userId, sessionId);
   }
 
   async getMe(userId: string): Promise<User> {

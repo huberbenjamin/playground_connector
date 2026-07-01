@@ -37,6 +37,11 @@ Authorization: Bearer <accessToken>
 **Notes:**
 - Activates a `PREGENERATED` user on first login.
 - If more than 10 users would be active, the oldest active user is removed and a new pregenerated ID is created.
+- Only one active session per user ID is allowed. If the user is already logged in elsewhere, login returns `401` with `"User is already logged in"`.
+- After the session expires (same duration as `JWT_EXPIRES_IN`), the user can log in again without calling logout.
+
+**Errors:**
+- `401` — invalid user ID, removed user, or user already logged in
 
 ---
 
@@ -65,11 +70,15 @@ Authorization: Bearer <accessToken>
 
 ### POST /logout
 
-**Auth:** None (client discards token)
+**Auth:** User JWT
 
 **Request body:** None
 
 **Response:** `204 No Content`
+
+**Notes:**
+- Invalidates the current server-side session so the same user ID can log in again from another client.
+- The client should also discard the stored JWT after logout.
 
 ---
 

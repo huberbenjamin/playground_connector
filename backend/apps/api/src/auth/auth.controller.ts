@@ -5,10 +5,14 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { UserAuthGuard } from './guards/auth.guards';
+import { CurrentActor } from '../common/decorators/current-actor.decorator';
+import { AuthenticatedActor, isUser } from '../common/types';
 import {
   AccessTokenResponseDto,
   AdminLoginDto,
@@ -29,7 +33,13 @@ export class AuthController {
   @ApiResponse({ status: 200, type: AccessTokenResponseDto })
   async login(@Body() dto: LoginDto): Promise<AccessTokenResponseDto> {
     const user = await this.usersService.login(dto.userId);
-    return { accessToken: this.authService.issueUserToken(user.id) };
+    const sessionId = await this.usersService.startSession(
+      user.id,
+      this.authService.getSessionExpiresAt(),
+    );
+    return {
+      accessToken: this.authService.issueUserToken(user.id, sessionId),
+    };
   }
 
   @Post('login-admin')
@@ -48,9 +58,14 @@ export class AuthController {
   }
 
   @Post('logout')
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Logout (client-side token discard)' })
-  logout(): void {
-    return;
+  @ApiOperation({ summary: 'Logout and invalidate the current user session' })
+  async logout(@CurrentActor() actor: AuthenticatedActor): Promise<void> {
+    if (!isUser(actor)) {
+      throw new UnauthorizedException('User authentication required');
+    }
+    await this.usersService.endSession(actor.userId, actor.sessionId);
   }
 }

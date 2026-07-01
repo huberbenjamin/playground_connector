@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import ms from 'ms';
 import {
   ActorRole,
   JwtAdminPayload,
@@ -16,12 +17,22 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  issueUserToken(userId: string): string {
+  issueUserToken(userId: string, sessionId: string): string {
     const payload: JwtUserPayload = {
       sub: userId,
       role: ActorRole.USER,
+      sessionId,
     };
     return this.jwtService.sign(payload);
+  }
+
+  getSessionExpiresAt(): Date {
+    const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN', '7d');
+    const durationMs = ms(expiresIn as ms.StringValue);
+    if (durationMs === undefined) {
+      throw new Error(`Invalid JWT_EXPIRES_IN value: ${expiresIn}`);
+    }
+    return new Date(Date.now() + durationMs);
   }
 
   issueAdminToken(username: string): string {
@@ -61,6 +72,7 @@ export class AuthService {
 
     return {
       userId: payload.sub,
+      sessionId: payload.sessionId,
       role: ActorRole.USER,
     };
   }
