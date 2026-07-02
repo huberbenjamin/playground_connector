@@ -1,0 +1,9 @@
+t=2026-07-02T10:23:18+0200 lvl=info msg="no configuration paths supplied"
+t=2026-07-02T10:23:18+0200 lvl=info msg="using configuration at default config path" path=/home/heavyubuntu/.config/ngrok/ngrok.yml
+t=2026-07-02T10:23:18+0200 lvl=info msg="open config file" path=/home/heavyubuntu/.config/ngrok/ngrok.yml err=nil
+t=2026-07-02T10:23:18+0200 lvl=info msg="FIPS 140 mode" enabled=false
+t=2026-07-02T10:23:18+0200 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
+t=2026-07-02T10:23:18+0200 lvl=info msg="client session established" obj=tunnels.session
+t=2026-07-02T10:23:18+0200 lvl=info msg="tunnel session started" obj=tunnels.session
+t=2026-07-02T10:23:18+0200 lvl=info msg="update available" obj=updater
+t=2026-07-02T10:23:19+0200 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://127.0.0.1:8000 url=https://bucked-fritter-promptly.ngrok-free.dev
