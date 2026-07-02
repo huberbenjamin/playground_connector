@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="api-base-url" content="{{ api_base_url }}">
   <title>ML — Sharp VR Album</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
@@ -45,7 +44,7 @@
       </div>
       <div id="user-info-chip" class="user-info-chip" style="display:none;"></div>
       <div id="gallery-grid" class="grid"></div>
-      <button class="fab" onclick="goToUpload()">+</button>
+      <button class="fab" onclick="showScreen('camera')">+</button>
     </section>
 
     <!-- Store -->
@@ -61,6 +60,42 @@
       </div>
     </section>
 
+    <!-- Camera -->
+    <section id="camera" class="screen">
+      <h1>Camera</h1>
+
+      <div class="camera-placeholder">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <canvas id="capture-canvas" style="display:none;"></canvas>
+      </div>
+
+      <p id="capture-count">0 / 6 images captured</p>
+        <div class="camera-controls">
+          <!--<button class="round-button count-button" disabled>
+            <span id="capture-number">0</span>
+          </button>-->
+
+          <button class="capture-button" onclick="captureImage()"></button>
+
+          <button class="round-button" onclick="continueToProcessing()">
+            →
+          </button>
+        </div>
+
+      <!-- <button onclick="startCamera()">Start Camera</button>
+      <button onclick="captureImage()">Capture</button>
+      <button onclick="continueToProcessing()">Continue</button>
+
+      <div id="preview-row"></div> -->
+    </section>
+
+    <!-- Processing -->
+    <section id="processing" class="screen">
+      <h1>Processing</h1>
+      <div class="camera-placeholder">
+        processing...
+      </div>
+    </section>
 
     <!-- AR / Playground -->
     <section id="ar" class="screen playground-screen">
@@ -166,7 +201,7 @@
 
   <nav id="bottom-nav" class="bottom-nav">
     <button class="nav-item" data-screen="ar" onclick="showScreen('ar')">Playground</button>
-    <button class="nav-item" data-screen="upload" onclick="goToUpload()">Upload</button>
+    <button class="nav-item" data-screen="camera" onclick="showScreen('camera')">Upload</button>
     <button class="nav-item" data-screen="gallery" onclick="showScreen('gallery')">Gallery</button>
     <button class="nav-item" data-screen="store" onclick="showScreen('store')">Store</button>
   </nav>
@@ -191,8 +226,6 @@
 
   <script>
     const API_BASE_URL = {{ api_base_url | tojson }};
-    const MAIN_PAGE_URL = "{{ url_for('main.ar_index') }}";
-    const UPLOAD_PAGE_URL = `${MAIN_PAGE_URL.replace(/\/$/, "")}/upload`;
     const AUTH_TOKEN_KEY = "accessToken";
     const AUTH_ROLE_KEY = "role";
     const AUTH_USER_ID_KEY = "userId";
@@ -208,7 +241,11 @@
     let adminObjects = [];
     let adminStats = null;
 
+    const MIN_CAPTURED_IMAGES = 1;
+    const MAX_CAPTURED_IMAGES = 6;
+    let capturedImages = [];
     let cameraStream = null;
+    let captureInProgress = false;
 
     function getToken() {
       return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -638,16 +675,6 @@
       showScreen("login");
     }
 
-    function getInitialUserScreen() {
-      const params = new URLSearchParams(window.location.search);
-      const screen = params.get("screen");
-      return ["ar", "gallery", "store"].includes(screen) ? screen : "gallery";
-    }
-
-    function goToUpload() {
-      window.location.href = UPLOAD_PAGE_URL;
-    }
-
     function showAuthenticatedView() {
       const role = getRole();
 
@@ -665,7 +692,7 @@
       if (role === "user") {
         document.getElementById("bottom-nav").style.display = "flex";
         renderUserInfoChip();
-        showScreen(getInitialUserScreen());
+        showScreen("gallery");
         return;
       }
 
@@ -1237,11 +1264,12 @@
     }
 
     async function uploadCapturedObject() {
-      const uploadUrl = `${API_BASE_URL}/objects/public`;
+      const uploadUrl = `${API_BASE_URL}/objects/generate`;
       const formData = new FormData();
 
       formData.append("title", "New Object");
       formData.append("description", "Created from camera capture");
+      formData.append("listingType", "PUBLIC");
 
       capturedImages.forEach((blob, index) => {
         formData.append("images", blob, `capture-${index + 1}.jpg`);
@@ -1282,12 +1310,12 @@
     }
 
     function normalizeGalleryObject(object) {
-      const id = object.id || object.objectId || `local-${Date.now()}`;
+      const id = object.objectId || object.id || `local-${Date.now()}`;
 
       return {
         ...object,
         id,
-        name: object.name || object.title || "New Object",
+        title: object.title || object.name || "New Object",
         createdAt: object.createdAt ? formatDate(object.createdAt) : formatDate(new Date().toISOString())
       };
     }
@@ -1330,6 +1358,7 @@
       cameraStream.getTracks().forEach(track => track.stop());
       cameraStream = null;
     }
+    
 
     async function loadObjects() {
       await Promise.all([
@@ -1769,10 +1798,17 @@
       window.location.href = `/ar/viewer?object=${encodeURIComponent(id)}`;
     }
 
+    function showProcessing() {
+      showScreen("processing");
+      setTimeout(() => {
+        alert("Success! Object created.");
+        showScreen("gallery");
+      }, 1200);
+    }
 
     function showScreen(id) {
       const publicScreens = ["login"];
-      const userScreens = ["gallery", "store", "ar"];
+      const userScreens = ["gallery", "store", "camera", "processing", "ar"];
       const adminScreens = ["admin", "admin-users", "admin-objects", "admin-stats"];
       const role = getRole();
       const token = getToken();
@@ -1809,11 +1845,27 @@
         loadGalleryObjects().then(() => loadStoreObjects());
       }
 
-      stopCamera();
+      if (id === "camera") {
+        startCamera();
+        updateCaptureControls();
+      } else {
+        stopCamera();
+      }
     }
 
     function resetCameraCaptureState() {
-      stopCamera();
+      capturedImages = [];
+      captureInProgress = false;
+
+      document.getElementById("capture-count").innerText =
+        `0 / ${MAX_CAPTURED_IMAGES} images captured`;
+
+      const previewRow = document.getElementById("preview-row");
+      if (previewRow) {
+        previewRow.innerHTML = "";
+      }
+
+      updateCaptureControls();
     }
 
     function initializeApp() {
