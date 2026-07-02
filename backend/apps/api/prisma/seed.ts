@@ -1,25 +1,59 @@
 import { PrismaClient, ObjectType, UserState } from '@prisma/client';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import {
-  ADMIN_CREATOR_ID,
-  SEED_DEFAULT_ADMIN_OBJECT_ID,
-} from '@marketplace/shared-types';
+import { ADMIN_CREATOR_ID, SEED_ADMIN_OBJECT_IDS } from '@marketplace/shared-types';
 
 const prisma = new PrismaClient();
 
 const INITIAL_POOL_SIZE = 10;
-const DEFAULT_ADMIN_OBJECT = {
-  objectId: SEED_DEFAULT_ADMIN_OBJECT_ID,
-  title: 'Object 01',
-  description: 'Default admin catalog item seeded for the marketplace shop.',
-  sogFileName: 'object01.sog',
-  thumbnailFileName: 'object01.jpg',
+
+type SeedAdminObject = {
+  objectId: string;
+  assetDir: string;
+  title: string;
+  description: string;
+  sogSource: string;
+  thumbnailSource: string;
+  sogFileName: string;
+  thumbnailFileName: string;
 };
+
+const SEED_ADMIN_OBJECTS: SeedAdminObject[] = [
+  {
+    objectId: SEED_ADMIN_OBJECT_IDS[0],
+    assetDir: 'cat-rabbit',
+    title: 'Cat Rabbit',
+    description: 'Admin shop item — cat rabbit splat.',
+    sogSource: 'cat-rabbit.sog',
+    thumbnailSource: 'cat-rabbit.jpg',
+    sogFileName: 'cat-rabbit.sog',
+    thumbnailFileName: 'cat-rabbit.jpg',
+  },
+  {
+    objectId: SEED_ADMIN_OBJECT_IDS[1],
+    assetDir: 'ml-sharp-knight',
+    title: 'Knight',
+    description: 'Admin shop item — ML Sharp knight splat.',
+    sogSource: 'knight.sog',
+    thumbnailSource: 'knight.jpg',
+    sogFileName: 'knight.sog',
+    thumbnailFileName: 'knight.jpg',
+  },
+  {
+    objectId: SEED_ADMIN_OBJECT_IDS[2],
+    assetDir: 'baby',
+    title: 'Baby',
+    description: 'Admin shop item — baby splat.',
+    sogSource: 'baby.sog',
+    thumbnailSource: 'baby.jpg',
+    sogFileName: 'baby.sog',
+    thumbnailFileName: 'baby.jpg',
+  },
+];
 
 const API_ROOT = path.resolve(__dirname, '..');
 const BACKEND_ROOT = path.resolve(API_ROOT, '../..');
-const SEED_ASSET_DIR = path.join(API_ROOT, 'prisma/seed-assets/object01');
+const SEED_ASSETS_ROOT = path.join(API_ROOT, 'prisma/seed-assets');
 
 function resolveStorageRoot(): string {
   const configured = process.env.STORAGE_ROOT;
@@ -100,11 +134,12 @@ async function ensureUserPool(): Promise<void> {
 }
 
 async function copySeedAsset(
+  assetDir: string,
   sourceName: string,
   targetDir: string,
   targetName: string,
 ): Promise<string> {
-  const sourcePath = path.join(SEED_ASSET_DIR, sourceName);
+  const sourcePath = path.join(SEED_ASSETS_ROOT, assetDir, sourceName);
   await fs.access(sourcePath);
 
   await fs.mkdir(targetDir, { recursive: true });
@@ -114,39 +149,41 @@ async function copySeedAsset(
   return targetName;
 }
 
-async function ensureDefaultAdminObject(): Promise<void> {
+async function ensureAdminObject(seedObject: SeedAdminObject): Promise<void> {
   const storageRoot = resolveStorageRoot();
   const sogDir = path.join(storageRoot, 'sog');
   const thumbnailDir = path.join(storageRoot, 'thumbnails');
 
   const sogFileName = await copySeedAsset(
-    'object.sog',
+    seedObject.assetDir,
+    seedObject.sogSource,
     sogDir,
-    DEFAULT_ADMIN_OBJECT.sogFileName,
+    seedObject.sogFileName,
   );
   const thumbnailFileName = await copySeedAsset(
-    'thumbnail.jpg',
+    seedObject.assetDir,
+    seedObject.thumbnailSource,
     thumbnailDir,
-    DEFAULT_ADMIN_OBJECT.thumbnailFileName,
+    seedObject.thumbnailFileName,
   );
 
   const sogPath = path.join('sog', sogFileName);
   const thumbnailPath = path.join('thumbnails', thumbnailFileName);
 
   await prisma.marketplaceObject.upsert({
-    where: { objectId: DEFAULT_ADMIN_OBJECT.objectId },
+    where: { objectId: seedObject.objectId },
     update: {
-      title: DEFAULT_ADMIN_OBJECT.title,
-      description: DEFAULT_ADMIN_OBJECT.description,
+      title: seedObject.title,
+      description: seedObject.description,
       sogPath,
       thumbnailPath,
       type: ObjectType.ADMIN,
       creatorUserId: ADMIN_CREATOR_ID,
     },
     create: {
-      objectId: DEFAULT_ADMIN_OBJECT.objectId,
-      title: DEFAULT_ADMIN_OBJECT.title,
-      description: DEFAULT_ADMIN_OBJECT.description,
+      objectId: seedObject.objectId,
+      title: seedObject.title,
+      description: seedObject.description,
       sogPath,
       thumbnailPath,
       type: ObjectType.ADMIN,
@@ -157,26 +194,30 @@ async function ensureDefaultAdminObject(): Promise<void> {
   await prisma.objectOwner.upsert({
     where: {
       objectId_userId: {
-        objectId: DEFAULT_ADMIN_OBJECT.objectId,
+        objectId: seedObject.objectId,
         userId: ADMIN_CREATOR_ID,
       },
     },
     update: {},
     create: {
-      objectId: DEFAULT_ADMIN_OBJECT.objectId,
+      objectId: seedObject.objectId,
       userId: ADMIN_CREATOR_ID,
     },
   });
 }
 
+async function ensureAdminShopObjects(): Promise<void> {
+  for (const seedObject of SEED_ADMIN_OBJECTS) {
+    await ensureAdminObject(seedObject);
+    console.log(`Admin shop object seeded: ${seedObject.title} (${seedObject.objectId})`);
+  }
+}
+
 async function main(): Promise<void> {
   await ensureSystemCreator();
   await ensureUserPool();
-  await ensureDefaultAdminObject();
+  await ensureAdminShopObjects();
   console.log('Database seed completed.');
-  console.log(
-    `Default admin shop object seeded: ${DEFAULT_ADMIN_OBJECT.objectId}`,
-  );
 }
 
 main()

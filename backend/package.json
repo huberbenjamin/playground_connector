@@ -13,7 +13,8 @@
     "start:api": "npm run start:prod --workspace=@marketplace/api",
     "db:migrate": "npm run db:migrate --workspace=@marketplace/api",
     "db:generate": "npm run db:generate --workspace=@marketplace/api",
-    "db:seed": "npm run db:seed --workspace=@marketplace/api"
+    "db:seed": "npm run db:seed --workspace=@marketplace/api",
+    "db:reset": "prisma migrate reset --force --schema=apps/api/prisma/schema.prisma"
   },
   "engines": {
     "node": ">=18"
@@ -29,6 +30,7 @@
     "class-validator": "^0.14.1"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19"
+    "@types/cors": "^2.8.19",
+    "@types/node": "^26.1.0"
   }
 }
