@@ -1,0 +1,8 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[ML-Sharp] Pre-loading background segmenter model...
+Initializing BiRefNet on device: cuda...
+Loading weights:   0%|          | 0/754 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 206/754 [00:00<00:00, 2053.56it/s]Loading weights:  55%|█████▍    | 412/754 [00:00<00:00, 1865.84it/s]Loading weights: 100%|██████████| 754/754 [00:00<00:00, 2752.20it/s]
+INFO:     Started server process [5017]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)

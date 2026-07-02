@@ -10,8 +10,15 @@ frontend/app/static/assets
 **/object_extraction/extracted_output_cleaned/
 **/object_extraction/output_assets/
 
-# Large Model Repositories / Submodules
+# Large Model Repositories / Submodules (ignore everything inside folder, not folder itself)
 **/object_extraction/FreeSplatter/
 **/object_extraction/LGM/
 
 .env
+
+# do not exclude custom files in FreeSplatter
+!**/object_extraction/FreeSplatter/my_freesplatter_module_pipeline.py
+!**/object_extraction/FreeSplatter/my_object_pipeline.pyls
+
+**/object_extraction/REST_backend/ckpts/
+object_extraction/REST_backend/ckpts/
