@@ -44,7 +44,6 @@
       </div>
       <div id="user-info-chip" class="user-info-chip" style="display:none;"></div>
       <div id="gallery-grid" class="grid"></div>
-      <button class="fab" onclick="goToUpload()">+</button>
     </section>
 
     <!-- Store -->
@@ -1490,7 +1489,7 @@
         await refreshCoins();
         console.log("Refreshed coins after buy:", localStorage.getItem(AUTH_COINS_KEY));
         alert("Object added to Gallery.");
-        showScreen("gallery");
+        showScreen("ar");
       } catch (error) {
         console.error("Shop purchase failed:", error);
         if (error instanceof TypeError) {

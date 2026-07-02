@@ -71,6 +71,14 @@ body {
   pointer-events: auto;
 }
 
+#ar-control-panel .control-spacer {
+  flex: 1 1 auto;
+}
+
+#ar-control-panel button[hidden] {
+  display: none;
+}
+
 #back-button,
 #ar-control-panel button,
 #drawer-toggle,
