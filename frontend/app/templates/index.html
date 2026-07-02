@@ -44,7 +44,7 @@
       </div>
       <div id="user-info-chip" class="user-info-chip" style="display:none;"></div>
       <div id="gallery-grid" class="grid"></div>
-      <button class="fab" onclick="showScreen('camera')">+</button>
+      <button class="fab" onclick="goToUpload()">+</button>
     </section>
 
     <!-- Store -->
@@ -57,43 +57,6 @@
       <div id="store-panel" class="panel" style="display:none;">
         <div id="selected-store-name">Object selected</div>
         <button onclick="addSelectedToGallery()">Add to Gallery</button>
-      </div>
-    </section>
-
-    <!-- Camera -->
-    <section id="camera" class="screen">
-      <h1>Camera</h1>
-
-      <div class="camera-placeholder">
-        <video id="camera-video" autoplay playsinline muted></video>
-        <canvas id="capture-canvas" style="display:none;"></canvas>
-      </div>
-
-      <p id="capture-count">0 / 6 images captured</p>
-        <div class="camera-controls">
-          <!--<button class="round-button count-button" disabled>
-            <span id="capture-number">0</span>
-          </button>-->
-
-          <button class="capture-button" onclick="captureImage()"></button>
-
-          <button class="round-button" onclick="continueToProcessing()">
-            →
-          </button>
-        </div>
-
-      <!-- <button onclick="startCamera()">Start Camera</button>
-      <button onclick="captureImage()">Capture</button>
-      <button onclick="continueToProcessing()">Continue</button>
-
-      <div id="preview-row"></div> -->
-    </section>
-
-    <!-- Processing -->
-    <section id="processing" class="screen">
-      <h1>Processing</h1>
-      <div class="camera-placeholder">
-        processing...
       </div>
     </section>
 
@@ -201,7 +164,7 @@
 
   <nav id="bottom-nav" class="bottom-nav">
     <button class="nav-item" data-screen="ar" onclick="showScreen('ar')">Playground</button>
-    <button class="nav-item" data-screen="camera" onclick="showScreen('camera')">Upload</button>
+    <button class="nav-item" data-screen="upload" onclick="goToUpload()">Upload</button>
     <button class="nav-item" data-screen="gallery" onclick="showScreen('gallery')">Gallery</button>
     <button class="nav-item" data-screen="store" onclick="showScreen('store')">Store</button>
   </nav>
@@ -226,6 +189,8 @@
 
   <script>
     const API_BASE_URL = {{ api_base_url | tojson }};
+    const MAIN_PAGE_URL = "{{ url_for('main.ar_index') }}";
+    const UPLOAD_PAGE_URL = `${MAIN_PAGE_URL.replace(/\/$/, "")}/upload`;
     const AUTH_TOKEN_KEY = "accessToken";
     const AUTH_ROLE_KEY = "role";
     const AUTH_USER_ID_KEY = "userId";
@@ -240,12 +205,6 @@
     let adminUsers = [];
     let adminObjects = [];
     let adminStats = null;
-
-    const MIN_CAPTURED_IMAGES = 1;
-    const MAX_CAPTURED_IMAGES = 6;
-    let capturedImages = [];
-    let cameraStream = null;
-    let captureInProgress = false;
 
     function getToken() {
       return localStorage.getItem(AUTH_TOKEN_KEY);
@@ -675,6 +634,18 @@
       showScreen("login");
     }
 
+
+
+    function getInitialUserScreen() {
+      const params = new URLSearchParams(window.location.search);
+      const screen = params.get("screen");
+      return ["ar", "gallery", "store"].includes(screen) ? screen : "gallery";
+    }
+
+    function goToUpload() {
+      window.location.href = UPLOAD_PAGE_URL;
+    }
+
     function showAuthenticatedView() {
       const role = getRole();
 
@@ -692,7 +663,7 @@
       if (role === "user") {
         document.getElementById("bottom-nav").style.display = "flex";
         renderUserInfoChip();
-        showScreen("gallery");
+        showScreen(getInitialUserScreen());
         return;
       }
 
@@ -1176,139 +1147,6 @@
       loadAdminStats();
     }
 
-    async function startCamera() {
-      try {
-        const video = document.getElementById("camera-video");
-
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment"
-          },
-          audio: false
-        });
-
-        video.srcObject = cameraStream;
-      } catch (error) {
-        console.error("Camera access failed:", error);
-        alert("Could not access camera. Please allow camera permissions.");
-      }
-    }
-
-    function captureImage() {
-      if (capturedImages.length >= MAX_CAPTURED_IMAGES) {
-        alert(`You already captured ${MAX_CAPTURED_IMAGES} images.`);
-        updateCaptureControls();
-        return;
-      }
-
-      if (captureInProgress) {
-        return;
-      }
-
-      const video = document.getElementById("camera-video");
-      const canvas = document.getElementById("capture-canvas");
-
-      if (!video.srcObject) {
-        alert("Start the camera first.");
-        return;
-      }
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      captureInProgress = true;
-      updateCaptureControls();
-
-      canvas.toBlob((blob) => {
-        captureInProgress = false;
-
-        if (!blob) {
-          updateCaptureControls();
-          return;
-        }
-
-        if (capturedImages.length >= MAX_CAPTURED_IMAGES) {
-          updateCaptureControls();
-          return;
-        }
-
-        capturedImages.push(blob);
-        updateCaptureUI(blob);
-      }, "image/jpeg", 0.9);
-    }
-
-    function updateCaptureUI(blob) {
-      document.getElementById("capture-count").innerText =
-        `${capturedImages.length} / ${MAX_CAPTURED_IMAGES} images captured`;
-
-      const previewRow = document.getElementById("preview-row");
-      if (previewRow) {
-        const img = document.createElement("img");
-        img.className = "preview-img";
-        img.src = URL.createObjectURL(blob);
-        previewRow.appendChild(img);
-      }
-
-      updateCaptureControls();
-    }
-
-    function updateCaptureControls() {
-      const captureButton = document.querySelector(".capture-button");
-      if (captureButton) {
-        captureButton.disabled =
-          captureInProgress || capturedImages.length >= MAX_CAPTURED_IMAGES;
-      }
-    }
-
-    async function uploadCapturedObject() {
-      const uploadUrl = `${API_BASE_URL}/objects/generate`;
-      const formData = new FormData();
-
-      formData.append("title", "New Object");
-      formData.append("description", "Created from camera capture");
-      formData.append("listingType", "PUBLIC");
-
-      capturedImages.forEach((blob, index) => {
-        formData.append("images", blob, `capture-${index + 1}.jpg`);
-      });
-
-      console.log("Object upload URL:", uploadUrl);
-      console.log("Object upload image count:", capturedImages.length);
-
-      const response = await fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          ...getAuthHeaders(),
-          "ngrok-skip-browser-warning": "true"
-        },
-        body: formData
-      });
-
-      console.log("Object upload response status:", response.status);
-
-      const responseText = await response.text();
-      console.log("Object upload response body:", responseText);
-
-      let data = {};
-      if (responseText) {
-        try {
-          data = JSON.parse(responseText);
-        } catch (error) {
-          console.warn("Object upload response was not JSON:", error);
-        }
-      }
-
-      if (!response.ok) {
-        const message = data.message || data.error || responseText || `Upload failed with status ${response.status}.`;
-        throw new Error(message);
-      }
-
-      return data;
-    }
-
     function normalizeGalleryObject(object) {
       const id = object.objectId || object.id || `local-${Date.now()}`;
 
@@ -1320,45 +1158,13 @@
       };
     }
 
-    async function continueToProcessing() {
-      if (!getToken()) {
-        alert("Log in before uploading an object.");
-        showPublicLogin();
-        return;
-      }
-
-      if (capturedImages.length == 0 ) {
-        alert("Capture at least one image first.");
-        return;
-      }
-      else if (capturedImages.length < MIN_CAPTURED_IMAGES || capturedImages.length > MAX_CAPTURED_IMAGES ) {
-        alert(`Capture ${MIN_CAPTURED_IMAGES}-${MAX_CAPTURED_IMAGES} images`);
-        return;
-      }
-
-      stopCamera();
-      showScreen("processing");
-
-      try {
-        await uploadCapturedObject();
-        resetCameraCaptureState();
-        await loadGalleryObjects();
-        await refreshCoins();
-        showScreen("gallery");
-      } catch (error) {
-        console.error("Object upload failed:", error);
-        alert(error.message || "Upload failed. Please try again.");
-        showScreen("camera");
-      }
-    }
-
     function stopCamera() {
-      if (!cameraStream) return;
-
-      cameraStream.getTracks().forEach(track => track.stop());
-      cameraStream = null;
+      // Upload camera handling lives on upload.html / upload.js.
     }
-    
+
+    function resetCameraCaptureState() {
+      // Upload state lives on upload.html / upload.js.
+    }
 
     async function loadObjects() {
       await Promise.all([
@@ -1798,17 +1604,9 @@
       window.location.href = `/ar/viewer?object=${encodeURIComponent(id)}`;
     }
 
-    function showProcessing() {
-      showScreen("processing");
-      setTimeout(() => {
-        alert("Success! Object created.");
-        showScreen("gallery");
-      }, 1200);
-    }
-
     function showScreen(id) {
       const publicScreens = ["login"];
-      const userScreens = ["gallery", "store", "camera", "processing", "ar"];
+      const userScreens = ["gallery", "store", "ar"];
       const adminScreens = ["admin", "admin-users", "admin-objects", "admin-stats"];
       const role = getRole();
       const token = getToken();
@@ -1845,27 +1643,7 @@
         loadGalleryObjects().then(() => loadStoreObjects());
       }
 
-      if (id === "camera") {
-        startCamera();
-        updateCaptureControls();
-      } else {
-        stopCamera();
-      }
-    }
-
-    function resetCameraCaptureState() {
-      capturedImages = [];
-      captureInProgress = false;
-
-      document.getElementById("capture-count").innerText =
-        `0 / ${MAX_CAPTURED_IMAGES} images captured`;
-
-      const previewRow = document.getElementById("preview-row");
-      if (previewRow) {
-        previewRow.innerHTML = "";
-      }
-
-      updateCaptureControls();
+      stopCamera();
     }
 
     function initializeApp() {
