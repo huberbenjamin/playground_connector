@@ -31,6 +31,9 @@
       apiBaseUrl: {{ api_base_url | tojson }},
       authTokenKey: "accessToken",
       fetchBackendGallery: true,
+      // Set this to true while developing to show the debug log toggle.
+      showDebugLogButton: false,
+      showDebugLogInitially: false,
       galleryObjects: [
         {
           id: "demo-01",
@@ -123,11 +126,11 @@
 
     <section id="ar-control-panel" aria-label="AR controls">
       <a id="back-button" href="{{ url_for('main.ar_index') }}">←</a>
-      <button id="start-ar" type="button">Start AR</button>
-      <button id="stop-ar" type="button" disabled>Stop AR</button>
-      <button id="save-transform" type="button">Save</button>
+      <button id="toggle-ar" type="button">Start AR</button>
       <button id="reset-transform" type="button">Reset</button>
-      <button id="toggle-log" type="button" aria-pressed="true">▶</button>
+      <span class="control-spacer" aria-hidden="true"></span>
+      <button id="toggle-log" type="button" aria-pressed="false" hidden>▶</button>
+      <button id="show-info" type="button" disabled>Info</button>
 
       <p id="ar-status" class="is-hidden">Ready. Select up to 6 objects, then tap Start AR.</p>
       <p id="gesture-hint" class="is-hidden">Selected marker: <strong id="active-marker-label">0</strong> · 1 finger rotate · 2 fingers pinch/twist</p>
