@@ -62,6 +62,7 @@ export interface ShopItemResponse {
   description: string;
   creatorUserId: string;
   thumbnailUrl: string;
+  sogUrl: string;
   type: ObjectType;
   createdAt: string;
 }
