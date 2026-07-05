@@ -1670,7 +1670,7 @@ async function setupMindAR() {
 }
 
 function updateMultitrackButtonLabel() {
-  if (![1, 2, 3, 4].includes(currentMaxTrack)) {
+  if (![1, 2, 4].includes(currentMaxTrack)) {
     currentMaxTrack = 1;
   }
 
@@ -1691,8 +1691,6 @@ multitrackButton.addEventListener("click", async () => {
     if (currentMaxTrack === 1) {
       currentMaxTrack = 2;
     } else if (currentMaxTrack === 2) {
-      currentMaxTrack = 3;
-    } else if (currentMaxTrack === 3) {
       currentMaxTrack = 4;
     } else {
       currentMaxTrack = 1;

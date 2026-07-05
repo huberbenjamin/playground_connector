@@ -1,0 +1,39 @@
+<!-- Gallery -->
+<section id="gallery" class="screen">
+  <div class="screen-header">
+    <h1>Gallery</h1>
+    <button class="logout-button" onclick="logout()">Logout</button>
+  </div>
+  <div id="user-info-chip" class="user-info-chip" style="display:none;"></div>
+  <div id="gallery-grid" class="grid gallery-grid"></div>
+</section>
+
+<div id="gallery-action-modal" class="gallery-sheet-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="gallery-action-title">
+  <article class="gallery-sheet-card">
+    <button class="gallery-sheet-close" type="button" onclick="closeGalleryActionModal()" aria-label="Close object details">×</button>
+    <div class="gallery-sheet-grabber" aria-hidden="true"></div>
+
+    <div id="gallery-sheet-thumbnail-wrap" class="gallery-sheet-thumbnail-wrap">
+      <div class="object-thumb">◼</div>
+    </div>
+
+    <div class="gallery-sheet-content">
+      <p id="gallery-sheet-meta" class="gallery-sheet-meta"></p>
+      <h2 id="gallery-action-title">Object</h2>
+      <p id="gallery-sheet-description" class="gallery-sheet-description">No description has been added for this object yet.</p>
+
+      <div id="gallery-action-main" class="modal-actions gallery-sheet-actions">
+        <button type="button" onclick="previewSelectedGalleryObject()">Preview</button>
+        <button type="button" onclick="openSelectedGalleryObjectInPlayground()">Open in Playground</button>
+        <button type="button" onclick="showGiftForm()">Send to User</button>
+      </div>
+
+      <form id="gallery-gift-form" class="gift-form hidden" onsubmit="sendSelectedGalleryObject(event)">
+        <label for="recipient-user-id-input">Recipient User ID</label>
+        <input id="recipient-user-id-input" type="text" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="654321">
+        <p id="gift-status" class="gift-status" role="alert"></p>
+        <button id="gift-send-button" type="submit">Send</button>
+      </form>
+    </div>
+  </article>
+</div>
