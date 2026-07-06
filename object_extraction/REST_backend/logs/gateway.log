@@ -1,4 +1,19 @@
-INFO:     Started server process [5392]
+INFO:     Started server process [5119]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Routing single image to ML-Sharp...
+Starting conversion via: /usr/local/bin/splat-transform
+Conversion completed successfully!
+INFO:     2a02:810d:2b99:2200:4454:c708:ce39:140b:0 - "POST /generate-sog HTTP/1.1" 200 OK
+Securely cleaned up: temp_d0fa541f-94cb-4af3-ba68-20af430e9194.ply
+Securely cleaned up: temp_d0fa541f-94cb-4af3-ba68-20af430e9194.sog
+Routing single image to ML-Sharp...
+Starting conversion via: /usr/local/bin/splat-transform
+Conversion completed successfully!
+INFO:     2a02:810d:2b99:2200:4454:c708:ce39:140b:0 - "POST /generate-sog HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5119]
+Interrupted system call ; error code 4

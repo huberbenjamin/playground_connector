@@ -1,8 +1,47 @@
+error    libmamba Could not set lock (Resource temporarily unavailable)
+warning  libmamba Cannot lock '/home/heavyubuntu/.cache/mamba/proc'
+    Waiting for other mamba process to finish
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 [ML-Sharp] Pre-loading background segmenter model...
 Initializing BiRefNet on device: cuda...
-Loading weights:   0%|          | 0/754 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 206/754 [00:00<00:00, 2053.56it/s]Loading weights:  55%|█████▍    | 412/754 [00:00<00:00, 1865.84it/s]Loading weights: 100%|██████████| 754/754 [00:00<00:00, 2752.20it/s]
-INFO:     Started server process [5017]
+Loading weights:   0%|          | 0/754 [00:00<?, ?it/s]Loading weights:  29%|██▉       | 218/754 [00:00<00:00, 2176.03it/s]Loading weights:  58%|█████▊    | 436/754 [00:00<00:00, 1978.62it/s]Loading weights: 100%|██████████| 754/754 [00:00<00:00, 2817.95it/s]
+INFO:     Started server process [4743]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+Model weights loaded successfully.
+[ML-Sharp] Processing image: capture-1.png
+Running inference model pass...
+[ML-Sharp] Invoking SHARP CLI for request 75fa51fa-5a88-42cb-9f44-af2e04253d61...
+[ML-Sharp] CLI execution completed successfully.
+[ML-Sharp] Found target PLY asset at: /tmp/ml_sharp_worker_tmp/predict_75fa51fa-5a88-42cb-9f44-af2e04253d61/segmented_75fa51fa-5a88-42cb-9f44-af2e04253d61.ply
+[ML-Sharp] Projecting 3D scene elements to 2D space for background filtering...
+Reading 3DGS file: segmented_75fa51fa-5a88-42cb-9f44-af2e04253d61.ply
+ -> Applying 2D Mask alignment (480x640) with threshold=15...
+ -> Spliced away 976915 background Gaussians (82.8%) using 2D projection.
+ -> Saved clean model to: clean_output_75fa51fa-5a88-42cb-9f44-af2e04253d61.ply
+[ML-Sharp] Cleaned up temp asset: input_75fa51fa-5a88-42cb-9f44-af2e04253d61.png
+[ML-Sharp] Cleaned up temp asset: segmented_75fa51fa-5a88-42cb-9f44-af2e04253d61.png
+[ML-Sharp] Cleaned up temp asset: mask_75fa51fa-5a88-42cb-9f44-af2e04253d61.png
+INFO:     127.0.0.1:42322 - "POST /process-single HTTP/1.1" 200 OK
+[ML-Sharp] Cleaned up temp asset: clean_output_75fa51fa-5a88-42cb-9f44-af2e04253d61.ply
+[ML-Sharp] Error deleting predict_75fa51fa-5a88-42cb-9f44-af2e04253d61: [Errno 21] Is a directory: '/tmp/ml_sharp_worker_tmp/predict_75fa51fa-5a88-42cb-9f44-af2e04253d61'
+[ML-Sharp] Processing image: capture-1.png
+Running inference model pass...
+[ML-Sharp] Invoking SHARP CLI for request 59171b04-92c2-4541-9d0f-ed43d82dfcbb...
+[ML-Sharp] CLI execution completed successfully.
+[ML-Sharp] Found target PLY asset at: /tmp/ml_sharp_worker_tmp/predict_59171b04-92c2-4541-9d0f-ed43d82dfcbb/segmented_59171b04-92c2-4541-9d0f-ed43d82dfcbb.ply
+[ML-Sharp] Projecting 3D scene elements to 2D space for background filtering...
+Reading 3DGS file: segmented_59171b04-92c2-4541-9d0f-ed43d82dfcbb.ply
+ -> Applying 2D Mask alignment (480x640) with threshold=15...
+ -> Spliced away 974304 background Gaussians (82.6%) using 2D projection.
+ -> Saved clean model to: clean_output_59171b04-92c2-4541-9d0f-ed43d82dfcbb.ply
+[ML-Sharp] Cleaned up temp asset: input_59171b04-92c2-4541-9d0f-ed43d82dfcbb.png
+[ML-Sharp] Cleaned up temp asset: segmented_59171b04-92c2-4541-9d0f-ed43d82dfcbb.png
+[ML-Sharp] Cleaned up temp asset: mask_59171b04-92c2-4541-9d0f-ed43d82dfcbb.png
+INFO:     127.0.0.1:36174 - "POST /process-single HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4743]
+Interrupted system call ; error code 4
