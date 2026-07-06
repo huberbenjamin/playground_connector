@@ -9,12 +9,17 @@ const AUTH_TOKEN_KEY = "accessToken";
 const API_BASE_URL = config.apiBaseUrl || "";
 let splats = config.splats || [];
 
-if (splats.length === 0) {
-  console.error("No splat files were configured.");
-}
-
 let currentIndex = 0;
 let currentSplat = null;
+
+const statusEl = document.getElementById("viewer-status");
+
+function setStatus(message, isError = false) {
+  if (!statusEl) return;
+  statusEl.textContent = message || "";
+  statusEl.classList.toggle("is-error", Boolean(isError));
+  statusEl.classList.toggle("is-hidden", !message);
+}
 
 const scene = new THREE.Scene();
 
@@ -30,11 +35,13 @@ camera.lookAt(0, 1.5, -1);
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
+  alpha: true,
   powerPreference: "high-performance"
 });
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0);
 renderer.domElement.style.touchAction = "none";
 document.body.appendChild(renderer.domElement);
 
@@ -45,10 +52,6 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.5, -1);
 controls.enableDamping = true;
 controls.update();
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-const clickableObjects = [];
 
 function getObjectIdFromQuery() {
   return new URLSearchParams(window.location.search).get("object");
@@ -80,7 +83,13 @@ function toSogLoadUrl(url) {
     const isApiAsset = !apiBase || parsed.origin === apiBase.origin;
 
     if (isApiAsset && parsed.pathname.startsWith("/files/sog/")) {
-      return `/ar/sog/${encodeURIComponent(parsed.pathname.replace("/files/sog/", ""))}`;
+      const relativeFilename = parsed.pathname.replace("/files/sog/", "");
+      const encodedFilename = relativeFilename
+        .split("/")
+        .map((part) => encodeURIComponent(decodeURIComponent(part)))
+        .join("/");
+
+      return `/ar/sog/${encodedFilename}`;
     }
   } catch (error) {
     console.warn("Could not parse SOG URL:", normalizedUrl, error);
@@ -95,7 +104,7 @@ async function fetchSelectedObjectSplatUrl() {
 
   const token = getToken();
   if (!token) {
-    window.location.href = "/";
+    window.location.href = `${config.mainPageUrl || "/ar"}?screen=gallery`;
     return "";
   }
 
@@ -109,7 +118,7 @@ async function fetchSelectedObjectSplatUrl() {
   const responseText = await response.text();
 
   if (response.status === 401 || response.status === 403) {
-    window.location.href = "/";
+    window.location.href = `${config.mainPageUrl || "/ar"}?screen=gallery`;
     return "";
   }
 
@@ -118,10 +127,15 @@ async function fetchSelectedObjectSplatUrl() {
   }
 
   const object = responseText ? JSON.parse(responseText) : {};
+  document.title = `${object.title || object.name || "Object"} · ConnectAR Preview`;
   return toSogLoadUrl(object.sogUrl);
 }
 
 function loadSplat(url) {
+  if (!url) {
+    throw new Error("No SOG URL was available for this object.");
+  }
+
   if (currentSplat) {
     scene.remove(currentSplat);
 
@@ -144,209 +158,13 @@ function loadSplat(url) {
   scene.add(currentSplat);
 }
 
-function createButton(text, position, onClick) {
-  const geometry = new THREE.PlaneGeometry(0.3, 0.1);
-
-  const backgroundMaterial = new THREE.MeshBasicMaterial({
-    color: 0x4444ff,
-    side: THREE.DoubleSide
-  });
-
-  const button = new THREE.Mesh(geometry, backgroundMaterial);
-  button.position.copy(position);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
-
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "white";
-  ctx.font = "bold 48px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, 128, 64);
-
-  const texture = new THREE.CanvasTexture(canvas);
-
-  const textMaterial = new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    side: THREE.DoubleSide
-  });
-
-  const textMesh = new THREE.Mesh(geometry, textMaterial);
-  textMesh.position.z = 0.01;
-  button.add(textMesh);
-
-  button.userData.onClick = onClick;
-  button.userData.isButton = true;
-
-  return button;
+function handleResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-const prevButton = createButton("PREV", new THREE.Vector3(-0.3, 1.3, -0.5), () => {
-  currentIndex = (currentIndex - 1 + splats.length) % splats.length;
-  loadSplat(splats[currentIndex]);
-});
-
-const nextButton = createButton("NEXT", new THREE.Vector3(0.3, 1.3, -0.5), () => {
-  currentIndex = (currentIndex + 1) % splats.length;
-  loadSplat(splats[currentIndex]);
-});
-
-scene.add(prevButton);
-scene.add(nextButton);
-clickableObjects.push(prevButton, nextButton);
-
-function findButtonRoot(object) {
-  let current = object;
-
-  while (current && !current.userData.isButton) {
-    current = current.parent;
-  }
-
-  return current && current.userData.isButton ? current : null;
-}
-
-function getIntersectedButton(event) {
-  const rect = renderer.domElement.getBoundingClientRect();
-
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-  raycaster.setFromCamera(pointer, camera);
-
-  const intersects = raycaster.intersectObjects(clickableObjects, true);
-
-  if (intersects.length === 0) {
-    return null;
-  }
-
-  return findButtonRoot(intersects[0].object);
-}
-
-// This tap detector allows:
-// - short tap on a 3D button => button click
-// - drag movement => OrbitControls rotation
-// - two fingers => OrbitControls pinch zoom
-const activePointers = new Map();
-
-let buttonTouchCandidate = null;
-let pointerDownPosition = null;
-let pointerDownId = null;
-
-const TAP_MOVEMENT_LIMIT_PX = 10;
-
-renderer.domElement.addEventListener(
-  "pointerdown",
-  (event) => {
-    activePointers.set(event.pointerId, event);
-
-    if (activePointers.size > 1) {
-      buttonTouchCandidate = null;
-      pointerDownPosition = null;
-      pointerDownId = null;
-      return;
-    }
-
-    const button = getIntersectedButton(event);
-
-    if (!button) {
-      buttonTouchCandidate = null;
-      pointerDownPosition = null;
-      pointerDownId = null;
-      return;
-    }
-
-    buttonTouchCandidate = button;
-    pointerDownPosition = {
-      x: event.clientX,
-      y: event.clientY
-    };
-    pointerDownId = event.pointerId;
-  },
-  { passive: true }
-);
-
-renderer.domElement.addEventListener(
-  "pointermove",
-  (event) => {
-    if (activePointers.has(event.pointerId)) {
-      activePointers.set(event.pointerId, event);
-    }
-
-    if (
-      !buttonTouchCandidate ||
-      !pointerDownPosition ||
-      event.pointerId !== pointerDownId
-    ) {
-      return;
-    }
-
-    const dx = event.clientX - pointerDownPosition.x;
-    const dy = event.clientY - pointerDownPosition.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > TAP_MOVEMENT_LIMIT_PX) {
-      buttonTouchCandidate = null;
-      pointerDownPosition = null;
-      pointerDownId = null;
-    }
-  },
-  { passive: true }
-);
-
-renderer.domElement.addEventListener(
-  "pointerup",
-  (event) => {
-    activePointers.delete(event.pointerId);
-
-    if (
-      !buttonTouchCandidate ||
-      !pointerDownPosition ||
-      event.pointerId !== pointerDownId
-    ) {
-      buttonTouchCandidate = null;
-      pointerDownPosition = null;
-      pointerDownId = null;
-      return;
-    }
-
-    const dx = event.clientX - pointerDownPosition.x;
-    const dy = event.clientY - pointerDownPosition.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    const releasedButton = getIntersectedButton(event);
-
-    if (
-      distance <= TAP_MOVEMENT_LIMIT_PX &&
-      releasedButton === buttonTouchCandidate &&
-      buttonTouchCandidate.userData.onClick
-    ) {
-      buttonTouchCandidate.userData.onClick();
-    }
-
-    buttonTouchCandidate = null;
-    pointerDownPosition = null;
-    pointerDownId = null;
-  },
-  { passive: true }
-);
-
-renderer.domElement.addEventListener(
-  "pointercancel",
-  (event) => {
-    activePointers.delete(event.pointerId);
-
-    if (event.pointerId === pointerDownId) {
-      buttonTouchCandidate = null;
-      pointerDownPosition = null;
-      pointerDownId = null;
-    }
-  },
-  { passive: true }
-);
+window.addEventListener("resize", handleResize);
 
 const controllerModelFactory = new XRControllerModelFactory();
 
@@ -364,37 +182,12 @@ for (let i = 0; i <= 1; i += 1) {
   );
 
   controller.add(line);
-
-  controller.addEventListener("selectstart", () => {
-    raycaster.setFromXRController(controller);
-
-    const intersects = raycaster.intersectObjects(clickableObjects, true);
-
-    for (const intersect of intersects) {
-      const button = findButtonRoot(intersect.object);
-
-      if (button && button.userData.onClick) {
-        button.userData.onClick();
-        break;
-      }
-    }
-  });
-
   scene.add(controller);
 
   const grip = renderer.xr.getControllerGrip(i);
   grip.add(controllerModelFactory.createControllerModel(grip));
   scene.add(grip);
 }
-
-function handleResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-window.addEventListener("resize", handleResize);
 
 document.body.appendChild(VRButton.createButton(renderer));
 
@@ -404,18 +197,25 @@ renderer.setAnimationLoop(() => {
 });
 
 async function initializeViewer() {
+  setStatus("Loading preview…");
+
   try {
     const selectedSplatUrl = await fetchSelectedObjectSplatUrl();
+
     if (selectedSplatUrl) {
       splats = [selectedSplatUrl];
       currentIndex = 0;
     }
-  } catch (error) {
-    console.error("Could not load selected backend object:", error);
-  }
 
-  if (splats.length > 0) {
-    loadSplat(splats[0]);
+    if (splats.length === 0) {
+      throw new Error("No splat files were configured.");
+    }
+
+    loadSplat(splats[currentIndex]);
+    setStatus("");
+  } catch (error) {
+    console.error("Could not initialize viewer:", error);
+    setStatus(error.message || "Could not load preview.", true);
   }
 }
 

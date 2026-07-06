@@ -241,6 +241,7 @@ Authorization: Bearer <accessToken>
     "description": "Description",
     "creatorUserId": "123456",
     "thumbnailUrl": "/files/thumbnails/file.jpg",
+    "sogUrl": "/files/sog/file.sog",
     "type": "PUBLIC",
     "createdAt": "2025-06-23T12:00:00.000Z"
   }

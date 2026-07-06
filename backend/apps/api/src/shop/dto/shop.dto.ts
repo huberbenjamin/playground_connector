@@ -16,9 +16,15 @@ export class ShopItemResponseDto {
 
   @ApiProperty({
     description: 'Public HTTP path for the frontend image src',
-    example: '/files/thumbnails/object01.jpg',
+    example: '/files/thumbnails/cat-rabbit.jpg',
   })
   thumbnailUrl!: string;
+
+  @ApiProperty({
+    description: 'Public HTTP path for the 3D SOG preview / purchase target',
+    example: '/files/sog/cat-rabbit.sog',
+  })
+  sogUrl!: string;
 
   @ApiProperty({ enum: ObjectType })
   type!: ObjectType;

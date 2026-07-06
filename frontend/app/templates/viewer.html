@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Splat Viewer</title>
+  <title>ConnectAR Preview</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/viewer.css') }}" />
 
@@ -20,6 +20,8 @@
   <script>
     window.VIEWER_CONFIG = {
       apiBaseUrl: {{ api_base_url | tojson }},
+      mainPageUrl: "{{ url_for('main.ar_index') }}",
+      playgroundPageUrl: "{{ url_for('main.demo_playground') }}",
       splats: [
         {% for i in range(1, 5) %}
           "{{ url_for('static', filename='assets/demo/extracted_%03d.sog' % i) }}"{% if not loop.last %},{% endif %}
@@ -29,6 +31,12 @@
   </script>
 </head>
 <body>
+  <nav id="viewer-actions" aria-label="Viewer navigation">
+    <a class="viewer-action-button viewer-action-secondary" href="{{ url_for('main.ar_index') }}?screen=gallery">← Back</a>
+    <a class="viewer-action-button" href="{{ url_for('main.demo_playground') }}">Playground</a>
+  </nav>
+
+  <p id="viewer-status" role="status">Loading preview…</p>
   <script type="module" src="{{ url_for('static', filename='js/viewer.js') }}"></script>
 </body>
 </html>

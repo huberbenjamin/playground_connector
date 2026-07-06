@@ -28,6 +28,7 @@ export class ShopService {
       description: item.description,
       creatorUserId: item.creatorUserId,
       thumbnailUrl: this.storageService.toPublicUrl(item.thumbnailPath),
+      sogUrl: this.storageService.toPublicUrl(item.sogPath),
       type: item.type,
       createdAt: item.createdAt.toISOString(),
     }));

@@ -90,7 +90,7 @@ This will:
 4. Generate Prisma client
 5. Run migrations
 6. Seed the initial user pool (10 pregenerated IDs)
-7. Seed the default admin shop object (`Object 01`) from `apps/api/prisma/seed-assets/object01/`
+7. Seed the admin shop catalog from `apps/api/prisma/seed-assets/` (Cat Rabbit, Knight, Baby)
 
 ### Manual database commands
 
@@ -101,8 +101,11 @@ npm run db:generate
 # Apply migrations
 npm run db:migrate
 
-# Seed user pool
+# Seed user pool and admin shop objects
 npm run db:seed
+
+# Reset database (drop, migrate, seed) — destructive!
+npm run db:reset
 
 # Create a new migration during development
 npm run db:migrate:dev --workspace=@marketplace/api

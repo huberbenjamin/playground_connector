@@ -7,11 +7,10 @@ console.log("demo_playground.js loaded");
 const config = window.DEMO_AR_CONFIG ?? {};
 
 const arContainer = document.querySelector("#ar-container");
-const startButton = document.querySelector("#start-ar");
-const stopButton = document.querySelector("#stop-ar");
-const saveButton = document.querySelector("#save-transform");
+const startButton = document.querySelector("#toggle-ar");
 const resetButton = document.querySelector("#reset-transform");
 const toggleLogButton = document.querySelector("#toggle-log");
+const infoButton = document.querySelector("#show-info");
 const clearAssignmentsButton = document.querySelector("#clear-assignments");
 const statusText = document.querySelector("#ar-status");
 const gestureHint = document.querySelector("#gesture-hint");
@@ -45,6 +44,8 @@ const AUTH_TOKEN_KEY = config.authTokenKey ?? "accessToken";
 const FETCH_BACKEND_GALLERY = config.fetchBackendGallery !== false;
 const THUMBNAIL_CACHE_NAME = config.thumbnailCacheName || "connectar-thumbnail-cache-v1";
 const SOG_PREFETCH_CONCURRENCY = Math.max(1, Math.min(3, Number(config.sogPrefetchConcurrency || 2)));
+const SHOW_DEBUG_LOG_BUTTON = config.showDebugLogButton === true;
+const SHOW_DEBUG_LOG_INITIALLY = SHOW_DEBUG_LOG_BUTTON && config.showDebugLogInitially === true;
 
 const multitrackButton = document.querySelector("#multitrack-button");
 const MULTITRACK_STORAGE_KEY = "demo-playground-enable-multi-track";
@@ -73,7 +74,7 @@ let hasSetup = false;
 let isRunning = false;
 let activeMarkerIndex = 0;
 let selectedInfoMarkerIndex = null;
-let isLogVisible = false;
+let isLogVisible = SHOW_DEBUG_LOG_INITIALLY;
 
 const markerStates = new Map();
 const visibleMarkers = new Set();
@@ -119,6 +120,23 @@ let assignments = loadAssignments();
 
 function setStatus(message) {
   statusText.textContent = message;
+}
+
+function updateArToggleButton() {
+  if (!startButton) return;
+  setArToggleLoading(false);
+  startButton.textContent = isRunning ? "Stop AR" : "Start AR";
+}
+
+function setArToggleLoading(isLoading) {
+  if (!startButton) return;
+  startButton.disabled = Boolean(isLoading);
+  startButton.textContent = isLoading ? "Loading..." : (isRunning ? "Stop AR" : "Start AR");
+}
+
+function updateInfoButtonState() {
+  if (!infoButton) return;
+  infoButton.disabled = !assignments[activeMarkerIndex];
 }
 
 function degToRad(degrees) {
@@ -533,7 +551,7 @@ async function preloadGallerySogFiles() {
 
   if (total === 0) {
     setSogDownloadOverlayVisible(false);
-    startButton.disabled = false;
+    setArToggleLoading(false);
     return;
   }
 
@@ -541,7 +559,7 @@ async function preloadGallerySogFiles() {
   let failed = 0;
   let nextIndex = 0;
 
-  startButton.disabled = true;
+  setArToggleLoading(true);
   setSogDownloadOverlayVisible(true);
   updateSogDownloadOverlay({
     downloaded: completed,
@@ -585,7 +603,7 @@ async function preloadGallerySogFiles() {
     Array.from({ length: Math.min(SOG_PREFETCH_CONCURRENCY, total) }, () => worker())
   );
 
-  startButton.disabled = false;
+  setArToggleLoading(false);
 
   if (failed > 0) {
     setStatus(`Prepared ${total - failed}/${total} SOG files. ${failed} failed.`);
@@ -650,13 +668,13 @@ function normalizeAssignmentsLength(value) {
 async function loadBackendGalleryObjects() {
   if (!FETCH_BACKEND_GALLERY) return;
 
-  startButton.disabled = true;
+  setArToggleLoading(true);
 
   const token = getAccessToken();
   if (!token) {
     galleryLoadState = "error";
     galleryLoadError = "No login token found. Go back and log in first.";
-    startButton.disabled = false;
+    setArToggleLoading(false);
     renderPickerUi();
     setStatus(galleryLoadError);
     return;
@@ -665,7 +683,7 @@ async function loadBackendGalleryObjects() {
   if (!API_BASE_URL) {
     galleryLoadState = "error";
     galleryLoadError = "No API base URL configured for the playground.";
-    startButton.disabled = false;
+    setArToggleLoading(false);
     renderPickerUi();
     setStatus(galleryLoadError);
     return;
@@ -701,7 +719,7 @@ async function loadBackendGalleryObjects() {
     console.error("Could not load backend gallery", error);
     galleryLoadState = "error";
     galleryLoadError = error.message || "Could not load your backend gallery.";
-    startButton.disabled = false;
+    setArToggleLoading(false);
     renderPickerUi();
     setStatus(`Gallery load failed: ${galleryLoadError}`);
   }
@@ -884,6 +902,8 @@ function updateTransformReadout() {
     `rot X ${Math.round(transform.rotationX)}° ` +
     `Y ${Math.round(transform.rotationY)}° ` +
     `Z ${Math.round(transform.rotationZ)}°`;
+
+  updateInfoButtonState();
 }
 
 function setObjectInfoThumbnail(object) {
@@ -915,6 +935,17 @@ function openObjectInfoSheet(markerIndex) {
 
   setStatus(`Selected ${object.name} on marker ${markerIndex}.`);
   return true;
+}
+
+function openActiveObjectInfoSheet() {
+  if (openObjectInfoSheet(activeMarkerIndex)) {
+    return;
+  }
+
+  const assignedName = getMarkerDisplayName(activeMarkerIndex);
+  setStatus(assignedName === "Empty"
+    ? `Marker ${activeMarkerIndex} has no object assigned.`
+    : `Could not open info for marker ${activeMarkerIndex}.`);
 }
 
 function closeObjectInfoSheet() {
@@ -1342,19 +1373,26 @@ function selectMarkerFromScreenPoint(clientX, clientY) {
   if (!markerState) return false;
 
   const markerIndex = markerState.markerIndex;
-  if (openObjectInfoSheet(markerIndex)) {
-    return true;
-  }
-
   setActiveMarker(markerIndex, { silent: true });
-  setStatus(`Selected marker ${markerIndex} from AR object.`);
+  setStatus(`Selected marker ${markerIndex}. Use Info to open details, or drag to rotate.`);
   return true;
 }
 
 function handleTouchStart(event) {
   if (shouldIgnoreGesture(event)) return;
 
-  const markerState = getActiveMarkerState();
+  let markerState = getActiveMarkerState();
+
+  if (event.touches.length === 1) {
+    const touch = event.touches[0];
+    const touchedMarkerState = getMarkerStateFromScreenPoint(touch.clientX, touch.clientY);
+
+    if (touchedMarkerState) {
+      markerState = touchedMarkerState;
+      setActiveMarker(touchedMarkerState.markerIndex, { silent: true });
+    }
+  }
+
   if (!markerState) return;
 
   event.preventDefault();
@@ -1632,7 +1670,7 @@ async function setupMindAR() {
 }
 
 function updateMultitrackButtonLabel() {
-  if (![1, 2, 3, 4].includes(currentMaxTrack)) {
+  if (![1, 2, 4].includes(currentMaxTrack)) {
     currentMaxTrack = 1;
   }
 
@@ -1653,8 +1691,6 @@ multitrackButton.addEventListener("click", async () => {
     if (currentMaxTrack === 1) {
       currentMaxTrack = 2;
     } else if (currentMaxTrack === 2) {
-      currentMaxTrack = 3;
-    } else if (currentMaxTrack === 3) {
       currentMaxTrack = 4;
     } else {
       currentMaxTrack = 1;
@@ -1678,12 +1714,20 @@ multitrackButton.addEventListener("click", async () => {
   }
 });
 
+async function toggleAR() {
+  if (isRunning) {
+    await stopAR();
+  } else {
+    await startAR();
+  }
+}
+
 async function startAR() {
   if (isRunning) return;
 
   try {
     setStatus("Loading AR scene...");
-    startButton.disabled = true;
+    setArToggleLoading(true);
 
     if (sogPreloadPromise) {
       setStatus("Waiting for gallery objects to finish downloading...");
@@ -1702,13 +1746,13 @@ async function startAR() {
     });
 
     isRunning = true;
-    stopButton.disabled = false;
+    updateArToggleButton();
     setStatus(`AR running. ${markerCount} markers configured, max ${currentMaxTrack} tracked at once.`);
   } catch (error) {
     console.error("startAR failed:", error);
     isRunning = false;
-    startButton.disabled = false;
-    stopButton.disabled = true;
+    setArToggleLoading(false);
+    updateArToggleButton();
     clearARView();
     setStatus(`AR failed: ${error.message}`);
   }
@@ -1728,8 +1772,8 @@ async function stopAR() {
     visibleMarkers.clear();
     clearARView();
 
-    startButton.disabled = false;
-    stopButton.disabled = true;
+    setArToggleLoading(false);
+    updateArToggleButton();
     setStatus("AR stopped.");
   } catch (error) {
     console.error("stopAR failed:", error);
@@ -1739,23 +1783,26 @@ async function stopAR() {
     visibleMarkers.clear();
     clearARView();
 
-    startButton.disabled = false;
-    stopButton.disabled = true;
+    setArToggleLoading(false);
+    updateArToggleButton();
     setStatus(`AR stopped with cleanup warning: ${error.message}`);
   }
 }
 
 function updateLogVisibility() {
   [statusText, gestureHint, transformReadout].forEach(el => el.classList.toggle("is-hidden", !isLogVisible));
+
+  if (!toggleLogButton) return;
+
+  toggleLogButton.hidden = !SHOW_DEBUG_LOG_BUTTON;
   toggleLogButton.textContent = isLogVisible ? "▼" : "▶";
   toggleLogButton.setAttribute("aria-pressed", String(isLogVisible));
 }
 
-startButton.addEventListener("click", startAR);
-stopButton.addEventListener("click", stopAR);
-saveButton.addEventListener("click", () => saveTransform(activeMarkerIndex));
-resetButton.addEventListener("click", resetActiveTransform);
-toggleLogButton.addEventListener("click", () => {
+startButton?.addEventListener("click", toggleAR);
+resetButton?.addEventListener("click", resetActiveTransform);
+infoButton?.addEventListener("click", openActiveObjectInfoSheet);
+toggleLogButton?.addEventListener("click", () => {
   isLogVisible = !isLogVisible;
   updateLogVisibility();
 });
@@ -1799,4 +1846,7 @@ window.addEventListener("beforeunload", () => {
 
 renderPickerUi();
 setDrawerExpanded(false);
+updateLogVisibility();
+updateArToggleButton();
+updateInfoButtonState();
 loadBackendGalleryObjects();
