@@ -53,3 +53,34 @@ def demo_playground():
 - `maxTrack` can stay below the total marker count. It only controls how many markers are tracked at the same time.
 - The splat orientation fix remains on each `SplatMesh`: `splat.quaternion.set(1, 0, 0, 0)`.
 - User rotation/scale is applied to the marker wrapper group, so transforms stay per marker, not per object.
+# Frontend Flask Server Setup
+
+## Setup
+
+```bash
+cd frontend
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+pip install -r requirements.txt
+python run.py
+```
+
+On Windows PowerShell:
+
+```powershell
+cd frontend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python run.py
+```
+
+## Routes
+
+- `GET /`
+
+## Run tests
+
+```bash
+pytest
+```
