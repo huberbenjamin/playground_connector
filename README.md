@@ -17,6 +17,7 @@ Users capture or upload images, generate a .sog 3D object, store it in a persona
 
 ## Architecture
 
+```text
 Flask Web Frontend
         │
         │ REST API + JWT
@@ -27,20 +28,22 @@ Prisma · PostgreSQL
         │ Images
         ▼
 Python Generation Gateway
-   ├── ML-Sharp
-   └── FreeSplatter
+        ├── ML-Sharp
+        └── FreeSplatter
         │
         ▼
-   PLY → SOG
+PLY → SOG
         │
         ▼
 Gallery · Marketplace · AR
+```
 
 ## Tech Stack
 
-Layer	Technologies
-Frontend	Flask, Jinja, JavaScript, CSS
-AR & 3D	MindAR, Three.js, Spark
-Backend	NestJS, TypeScript, Prisma, PostgreSQL
-Generation	ML-Sharp, FreeSplatter, BiRefNet
-Auth	JWT + server-side session validation
+| Layer | Technologies |
+|---|---|
+| Frontend | Flask, Jinja, JavaScript, CSS |
+| AR & 3D | MindAR, Three.js, Spark |
+| Backend | NestJS, TypeScript, Prisma, PostgreSQL |
+| Generation | ML-Sharp, FreeSplatter, BiRefNet |
+| Auth | JWT + server-side session validation |
